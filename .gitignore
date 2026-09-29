@@ -1,0 +1,91 @@
+# Adaptado do modelo Unity do GitHub para projeto em subpasta
+# Os prefixos **/ fazem as regras valerem em qualquer nível
+
+.utmp/
+**/[Ll]ibrary/
+**/[Tt]emp/
+**/[Oo]bj/
+**/[Bb]uild/
+**/[Bb]uilds/
+**/[Ll]ogs/
+**/[Uu]ser[Ss]ettings/
+*.log
+
+# Arquivos de backup do Blender
+*.blend1
+*.blend1.meta
+
+# MemoryCaptures podem ficar muito grandes
+**/[Mm]emoryCaptures/
+
+# Gravações podem ficar muito grandes
+**/[Rr]ecordings/
+
+# Descomente para ignorar o plugin Asset Store Tools
+# **/[Aa]ssets/AssetStoreTools*
+
+# Plugin gerado automaticamente pelo Rider
+**/[Aa]ssets/Plugins/Editor/JetBrains*
+
+# Cache do Visual Studio
+.vs/
+
+# Cache do Gradle
+.gradle/
+
+# Arquivos de solução e projeto gerados automaticamente
+ExportedObj/
+.consulo/
+*.csproj
+*.unityproj
+*.sln
+*.slnx
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# Meta files gerados pelo Unity
+*.pidb.meta
+*.pdb.meta
+*.mdb.meta
+
+# Relatórios de crash
+sysinfo.txt
+mono_crash.*
+
+# Builds
+*.apk
+*.aab
+*.unitypackage
+*.unitypackage.meta
+*.app
+
+# Crashlytics
+crashlytics-build.properties
+
+# Test Runner
+InitTestScene*.unity*
+
+# Addressables
+**/ServerData/
+**/[Aa]ssets/StreamingAssets/aa*
+**/[Aa]ssets/AddressableAssetsData/link.xml*
+**/[Aa]ssets/Addressables_Temp*
+**/[Aa]ssets/AddressableAssetsData/*/*.bin*
+
+# Visual Scripting
+**/[Aa]ssets/Unity.VisualScripting.Generated/VisualScripting.Flow/UnitOptions.db
+**/[Aa]ssets/Unity.VisualScripting.Generated/VisualScripting.Flow/UnitOptions.db.meta
+**/[Aa]ssets/Unity.VisualScripting.Generated/VisualScripting.Core/Property Providers
+**/[Aa]ssets/Unity.VisualScripting.Generated/VisualScripting.Core/Property Providers.meta
+
+# Cenas geradas por testes
+**/[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
