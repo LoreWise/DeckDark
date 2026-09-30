@@ -87,11 +87,14 @@ namespace DeckDark.View
             DrawBulbGlow(c);
 
             // ---- Interface (objetos de papel com luz aproximada) ----
-            if (screen != GameScreen.Title) DrawSheet(c);
+            pendingTooltip = null;
+            if (InRun) DrawSheet(c);
 
             switch (screen)
             {
-                case GameScreen.Title: DrawTitle(c); break;
+                case GameScreen.Menu: DrawMenu(c); break;
+                case GameScreen.NewGame: DrawMenu(c, false); DrawNewGame(c); break;
+                case GameScreen.Options: DrawMenu(c, false); DrawOptions(c); break;
                 case GameScreen.Map: DrawMap(c); DrawMapLegend(c); break;
                 case GameScreen.Combat: DrawCombatUi(c); break;
                 case GameScreen.Reward: DrawReward(c); break;
@@ -106,28 +109,15 @@ namespace DeckDark.View
             DrawDice(c);
             DrawFloaters(c);
             DrawSpeech(c);
+            DrawMenuTag(c);
+            // A descricao da reliquia e desenhada por ultimo, por cima de cartas e mapa
+            if (pendingTooltip != null) Tooltip(c, pendingTooltip, pendingTooltipX, pendingTooltipY);
+            if (paused) DrawPause(c);
             DrawGrain(c);
         }
 
-        // ---------------- Titulo ----------------
-
-        void DrawTitle(PixelCanvas c)
-        {
-            c.ResetTint();
-            c.FillAlpha(0, 118, W, 124, Palette.Black, 0.55f);
-            int y = 128;
-            PixelFont.Big.DrawCentered(c, "CAMPANHA", 241, y + 1, Palette.DarkRed, 3);
-            PixelFont.Big.DrawCentered(c, "CAMPANHA", 240, y, Palette.Paper, 3);
-            PixelFont.Big.DrawCentered(c, "SEM FIM", 241, y + 31, Palette.DarkRed, 3);
-            PixelFont.Big.DrawCentered(c, "SEM FIM", 240, y + 30, Palette.Paper, 3);
-            PixelFont.Small.DrawCentered(c, "UM JOGO DE CARTAS NUM PORÃO. SÁBADO, 1991.", 240, y + 66, Palette.PaperDark);
-            if ((int)(time * 1.6f) % 2 == 0)
-                PixelFont.Big.DrawCentered(c, sessions == 0 ? "CLIQUE PARA SENTAR À MESA" : "CLIQUE PARA JOGAR DE NOVO", 240, y + 82, Palette.Gold);
-
-            string stats = "SESSÕES " + sessions + "   MORTES " + deaths + "   REGRAS DA CASA V" + RulesVersion + ".0";
-            PixelFont.Small.DrawCentered(c, stats, 240, 256, Palette.Pencil);
-            PixelFont.Small.Draw(c, "PROTÓTIPO 0.1", 6, 260, Palette.Pencil);
-        }
+        string pendingTooltip;
+        int pendingTooltipX, pendingTooltipY;
 
         // ---------------- Ficha do personagem ----------------
 
@@ -142,9 +132,9 @@ namespace DeckDark.View
             c.VLine(x + 5, y, y + SheetH - 1, Rgb.Hex(0xe0a0a0));
             c.Rect(x, y, SheetW, SheetH, Palette.PaperDark);
 
-            PixelFont.Small.Draw(c, "FICHA DE PERSONAGEM", x + 8, y + 3, Palette.Pencil);
+            PixelFont.Small.Draw(c, "CHARACTER SHEET", x + 8, y + 3, Palette.Pencil);
             PixelFont.Big.Draw(c, s.Name.ToUpperInvariant(), x + 8, y + 11, Palette.Ink);
-            PixelFont.Small.Draw(c, "NV " + s.Level, x + 88, y + 14, Palette.Pencil);
+            PixelFont.Small.Draw(c, "LV " + s.Level, x + 88, y + 14, Palette.Pencil);
 
             for (int i = 0; i < 6; i++)
             {
@@ -159,7 +149,7 @@ namespace DeckDark.View
 
             int hp = screen == GameScreen.Combat ? shownPlayerHp : s.Hp;
             int yy = y + 72;
-            PixelFont.Small.Draw(c, "PV", x + 8, yy + 1, Palette.Pencil);
+            PixelFont.Small.Draw(c, "HP", x + 8, yy + 1, Palette.Pencil);
             c.Fill(x + 20, yy, 90, 9, Rgb.Hex(0x3a1a1a));
             int fill = (int)(88f * Math.Max(0, hp) / s.MaxHp);
             c.Fill(x + 21, yy + 1, fill, 7, hp <= s.MaxHp / 4 ? Palette.Red : Rgb.Hex(0xb03a30));
@@ -169,14 +159,14 @@ namespace DeckDark.View
             yy += 13;
             int ac = combat != null ? combat.PlayerArmorClass : s.ArmorClass;
             c.Sprite(Sprites.IconShield, x + 8, yy, ch => ch == 'a' ? Rgb.Hex(0x8a98a8) : (ch == 'b' ? Palette.Ink : Palette.White));
-            PixelFont.Big.Draw(c, "CA " + ac, x + 20, yy, Palette.Ink);
+            PixelFont.Big.Draw(c, "AC " + ac, x + 20, yy, Palette.Ink);
             if (screen == GameScreen.Combat && shownBlock > 0)
             {
-                PixelFont.Big.Draw(c, "BLOQ " + shownBlock, x + 60, yy, Rgb.Hex(0x2a5a9a));
+                PixelFont.Big.Draw(c, "BLOCK " + shownBlock, x + 60, yy, Rgb.Hex(0x2a5a9a));
             }
 
             yy += 13;
-            PixelFont.Small.Draw(c, "ENERGIA", x + 8, yy + 2, Palette.Pencil);
+            PixelFont.Small.Draw(c, "ENERGY", x + 8, yy + 2, Palette.Pencil);
             int energy = combat != null ? combat.Energy : s.EnergyPerTurn;
             for (int i = 0; i < s.EnergyPerTurn; i++)
             {
@@ -187,21 +177,27 @@ namespace DeckDark.View
             }
 
             yy += 13;
-            PixelFont.Small.Draw(c, "RELÍQUIAS", x + 8, yy, Palette.Pencil);
+            PixelFont.Small.Draw(c, "RELICS", x + 8, yy, Palette.Pencil);
             yy += 8;
-            if (s.Relics.Count == 0) PixelFont.Small.Draw(c, "- NENHUMA -", x + 10, yy, Rgb.Hex(0xa8a090));
+            if (s.Relics.Count == 0) PixelFont.Small.Draw(c, "- NONE -", x + 10, yy, Rgb.Hex(0xa8a090));
             RelicDef hoveredRelic = null;
+            int hoveredRelicY = 0;
             foreach (var r in s.Relics)
             {
                 bool hov = Hover(x + 6, yy - 1, SheetW - 12, 8);
                 PixelFont.Small.Draw(c, "* " + r.Name, x + 10, yy, hov ? Palette.DarkRed : Palette.Ink);
-                if (hov) hoveredRelic = r;
+                if (hov) { hoveredRelic = r; hoveredRelicY = yy; }
                 yy += 8;
             }
 
-            PixelFont.Small.Draw(c, "DECK: " + s.Deck.Count + " CARTAS", x + 8, y + SheetH - 10, Palette.Pencil);
+            PixelFont.Small.Draw(c, "DECK: " + s.Deck.Count + " CARDS", x + 8, y + SheetH - 10, Palette.Pencil);
 
-            if (hoveredRelic != null) Tooltip(c, hoveredRelic.Description, x + SheetW + 4, SheetY + 110);
+            if (hoveredRelic != null && !paused)
+            {
+                pendingTooltip = hoveredRelic.Name + ": " + hoveredRelic.Description;
+                pendingTooltipX = x + SheetW + 4;
+                pendingTooltipY = hoveredRelicY - 6;
+            }
             c.ResetTint();
         }
 
@@ -217,14 +213,14 @@ namespace DeckDark.View
 
         void DrawRulesNotebook(PixelCanvas c)
         {
-            if (screen == GameScreen.Title) return;
+            if (!InRun) return;
             int x = 318, y = 102;
             c.Fill(x + 2, y + 2, 58, 22, Rgb.Hex(0x2a1a10));
             c.Fill(x, y, 58, 22, Rgb.Hex(0x2a3a5a));
             c.Fill(x + 3, y + 3, 52, 16, Rgb.Hex(0xe0d8c0));
             for (int i = 0; i < 6; i++) c.Set(x + 4 + i * 9, y + 1, Rgb.Hex(0xb0b0b8));
-            PixelFont.Small.Draw(c, "REGRAS DA", x + 6, y + 4, Palette.Ink);
-            PixelFont.Small.Draw(c, "CASA V" + (run != null ? run.RulesVersion : RulesVersion) + ".0", x + 6, y + 11, Palette.DarkRed);
+            PixelFont.Small.Draw(c, "HOMEBREW", x + 6, y + 4, Palette.Ink);
+            PixelFont.Small.Draw(c, "V" + (run != null ? run.RulesVersion : selectedRules) + ".0", x + 6, y + 11, Palette.DarkRed);
         }
 
         // ---------------- Mapa ----------------
@@ -238,8 +234,8 @@ namespace DeckDark.View
             for (int gx = x + 6; gx < x + w; gx += 8) c.VLine(gx, y + 1, y + h - 2, Rgb.Hex(0xcfd8dc));
             for (int gy = y + 6; gy < y + h; gy += 8) c.HLine(x + 1, x + w - 2, gy, Rgb.Hex(0xcfd8dc));
             c.Rect(x, y, w, h, Palette.PaperDark);
-            PixelFont.Small.Draw(c, "MASMORRA DO REI SEM ROSTO", x + 6, y + 4, Palette.Pencil);
-            PixelFont.Small.Draw(c, "ANDAR 1", x + w - 34, y + 4, Palette.Pencil);
+            PixelFont.Small.Draw(c, "DUNGEON OF THE FACELESS KING", x + 6, y + 4, Palette.Pencil);
+            PixelFont.Small.Draw(c, "FLOOR 1", x + w - 32, y + 4, Palette.Pencil);
 
             var hovered = HoveredNode();
 
@@ -290,7 +286,7 @@ namespace DeckDark.View
                 PixelFont.Small.Draw(c, label, lx + 3, ly + 2, Palette.Paper);
             }
             if (!scriptActive)
-                PixelFont.Small.DrawCentered(c, "ESCOLHA A PRÓXIMA SALA", x + w / 2, y + h - 10, Palette.DarkRed);
+                PixelFont.Small.DrawCentered(c, "CHOOSE THE NEXT ROOM", x + w / 2, y + h - 10, Palette.DarkRed);
             c.ResetTint();
         }
 
@@ -298,12 +294,12 @@ namespace DeckDark.View
         {
             switch (t)
             {
-                case NodeType.Start: return "ENTRADA";
-                case NodeType.Combat: return "COMBATE";
-                case NodeType.Event: return "EVENTO";
-                case NodeType.Treasure: return "TESOURO";
-                case NodeType.Tavern: return "LANCHE";
-                default: return "CHEFE";
+                case NodeType.Start: return "ENTRANCE";
+                case NodeType.Combat: return "COMBAT";
+                case NodeType.Event: return "EVENT";
+                case NodeType.Treasure: return "TREASURE";
+                case NodeType.Tavern: return "SNACK";
+                default: return "BOSS";
             }
         }
 
@@ -331,7 +327,7 @@ namespace DeckDark.View
             int x = 392, y = 132;
             c.Fill(x, y, 82, 70, Rgb.Hex(0xe0d8c0));
             c.Rect(x, y, 82, 70, Palette.PaperDark);
-            PixelFont.Small.Draw(c, "LEGENDA", x + 4, y + 3, Palette.Pencil);
+            PixelFont.Small.Draw(c, "LEGEND", x + 4, y + 3, Palette.Pencil);
             var types = new[] { NodeType.Combat, NodeType.Event, NodeType.Treasure, NodeType.Tavern, NodeType.Boss };
             for (int i = 0; i < types.Length; i++)
             {
@@ -469,12 +465,12 @@ namespace DeckDark.View
             if (enemyFade <= 0)
             {
                 DrawHpBar(c, EnemyMiniX, 180, shownEnemyHp, e.MaxHp, shownEnemyBlock);
-                PixelFont.Small.DrawCentered(c, e.Name + "  CA " + combat.EnemyArmorClass, EnemyMiniX, 186, Palette.Ink);
+                PixelFont.Small.DrawCentered(c, e.Name + "  AC " + combat.EnemyArmorClass, EnemyMiniX, 186, Palette.Ink);
                 DrawIntent(c);
             }
             DrawHpBar(c, PlayerMiniX, 180, shownPlayerHp, run.Sheet.MaxHp, shownBlock);
-            PixelFont.Small.DrawCentered(c, "VOCÊ  CA " + combat.PlayerArmorClass, PlayerMiniX, 186, Palette.Ink);
-            if (combat.NextAttackAdvantage) PixelFont.Small.DrawCentered(c, "VANTAGEM", PlayerMiniX, 131, Rgb.Hex(0x9a7010));
+            PixelFont.Small.DrawCentered(c, "YOU  AC " + combat.PlayerArmorClass, PlayerMiniX, 186, Palette.Ink);
+            if (combat.NextAttackAdvantage) PixelFont.Small.DrawCentered(c, "ADVANTAGE", PlayerMiniX, 131, Rgb.Hex(0x9a7010));
 
             // botao de fim de turno
             TintAt(430, 140, 0.7f);
@@ -483,13 +479,13 @@ namespace DeckDark.View
             c.Fill(EndTurnX + 2, EndTurnY + 2, EndTurnW, EndTurnH, Rgb.Hex(0x2a1a10));
             c.Fill(EndTurnX, EndTurnY, EndTurnW, EndTurnH, hov ? Rgb.Hex(0xf0d890) : Palette.Paper);
             c.Rect(EndTurnX, EndTurnY, EndTurnW, EndTurnH, Palette.Ink);
-            PixelFont.Big.DrawCentered(c, "FIM DO TURNO", EndTurnX + EndTurnW / 2, EndTurnY + 5, canEnd ? Palette.Ink : Palette.Pencil);
+            PixelFont.Big.DrawCentered(c, "END TURN", EndTurnX + EndTurnW / 2, EndTurnY + 5, canEnd ? Palette.Ink : Palette.Pencil);
 
             // pilhas de compra e descarte
-            DrawPile(c, 398, 136, combat.DrawPile.Count, "COMPRA", true);
-            DrawPile(c, 438, 136, combat.Discard.Count, "DESCARTE", false);
-            PixelFont.Small.Draw(c, "TURNO " + combat.Turn, 398, 188, Palette.Paper);
-            if (combat.Exhausted.Count > 0) PixelFont.Small.Draw(c, "ESGOTADAS " + combat.Exhausted.Count, 398, 196, Palette.Paper);
+            DrawPile(c, 398, 136, combat.DrawPile.Count, "DRAW", true);
+            DrawPile(c, 438, 136, combat.Discard.Count, "DISCARD", false);
+            PixelFont.Small.Draw(c, "TURN " + combat.Turn, 398, 188, Palette.Paper);
+            if (combat.Exhausted.Count > 0) PixelFont.Small.Draw(c, "EXHAUSTED " + combat.Exhausted.Count, 398, 196, Palette.Paper);
 
             DrawHand(c);
             c.ResetTint();
@@ -578,10 +574,10 @@ namespace DeckDark.View
             string kind;
             switch (card.Kind)
             {
-                case CardKind.Attack: band = Rgb.Hex(0xa83a3a); kind = "ATAQUE"; break;
-                case CardKind.Defense: band = Rgb.Hex(0x3a6aa8); kind = "DEFESA"; break;
-                case CardKind.Skill: band = Rgb.Hex(0x3a8a5a); kind = "PERÍCIA"; break;
-                default: band = Rgb.Hex(0x3a1a4a); kind = "MALDIÇÃO"; break;
+                case CardKind.Attack: band = Rgb.Hex(0xa83a3a); kind = "ATTACK"; break;
+                case CardKind.Defense: band = Rgb.Hex(0x3a6aa8); kind = "DEFENSE"; break;
+                case CardKind.Skill: band = Rgb.Hex(0x3a8a5a); kind = "SKILL"; break;
+                default: band = Rgb.Hex(0x3a1a4a); kind = "CURSE"; break;
             }
 
             c.FillAlpha(x + 2, y + 3, CardW, CardH, Palette.Black, 0.5f);
@@ -650,7 +646,7 @@ namespace DeckDark.View
                 c.Rect(bx - 16, by - 9, 32, 16, Palette.Red);
                 string t = rolling ? "?" : dice.Announced.ToString();
                 PixelFont.Big.DrawCentered(c, t, bx, by - 6, rolling ? Palette.Paper : Palette.Red);
-                PixelFont.Small.DrawCentered(c, "ATRÁS DO ESCUDO", bx, by + 9, Palette.Paper);
+                PixelFont.Small.DrawCentered(c, "BEHIND THE SCREEN", bx, by + 9, Palette.Paper);
                 return;
             }
 
@@ -663,14 +659,14 @@ namespace DeckDark.View
 
             int ty = dice.Y + 18;
             c.FillAlpha(x - 60, ty - 1, 120, rolling ? 9 : 17, Palette.Black, 0.6f);
-            PixelFont.Small.DrawCentered(c, dice.Label + (r.Advantage ? " (VANTAGEM)" : ""), x, ty, Palette.Paper);
+            PixelFont.Small.DrawCentered(c, dice.Label + (r.Advantage ? " (ADVANTAGE)" : ""), x, ty, Palette.Paper);
             if (!rolling)
             {
                 string vs = r.Target > 0 ? "  VS " + r.Target : "";
                 string m = r.Modifier >= 0 ? "+" + r.Modifier : r.Modifier.ToString();
                 string line = r.Natural + m + " = " + r.Total + vs;
                 Rgb col = r.IsCrit ? Palette.Gold : (r.Success ? Palette.Green : Palette.Red);
-                PixelFont.Small.DrawCentered(c, line + (r.Success ? "  SUCESSO" : "  FALHA"), x, ty + 8, col);
+                PixelFont.Small.DrawCentered(c, line + (r.Success ? "  SUCCESS" : "  FAIL"), x, ty + 8, col);
             }
         }
 
@@ -755,12 +751,12 @@ namespace DeckDark.View
         {
             c.ResetTint();
             c.FillAlpha(132, 128, 252, 136, Palette.Black, 0.45f);
-            PixelFont.Big.DrawCentered(c, "ESCREVA UMA CARTA NA FICHA", 258, 132, Palette.Paper);
+            PixelFont.Big.DrawCentered(c, "WRITE A CARD ON YOUR SHEET", 258, 132, Palette.Paper);
             int hov = -1;
             for (int i = 0; i < 3; i++) if (Hover(RewardCardX(i), RewardY, CardW, CardH)) hov = i;
             for (int i = 0; i < 3; i++)
                 DrawCard(c, rewardCards[i], RewardCardX(i), RewardY - (i == hov ? 4 : 0), true, i == hov);
-            DrawButton(c, SkipX, SkipY, SkipW, SkipH, "PULAR");
+            DrawButton(c, SkipX, SkipY, SkipW, SkipH, "SKIP");
         }
 
         void DrawButton(PixelCanvas c, int x, int y, int w, int h, string label)
@@ -800,7 +796,7 @@ namespace DeckDark.View
                     if (ch.HasTest)
                     {
                         int m = run.Sheet.Mod(ch.TestAttr);
-                        label += "  [" + CharacterSheet.AttrName(ch.TestAttr) + " CD " + ch.Dc + ", " + (m >= 0 ? "+" : "") + m + "]";
+                        label += "  [" + CharacterSheet.AttrName(ch.TestAttr) + " DC " + ch.Dc + ", " + (m >= 0 ? "+" : "") + m + "]";
                     }
                     DrawChoice(c, i, label);
                 }
@@ -810,7 +806,7 @@ namespace DeckDark.View
                 c.ResetTint();
                 TintAt(255, 200, 0.75f);
                 PixelFont.Big.DrawWrapped(c, eventResult, 142, 194, 234, Palette.DarkRed);
-                DrawButton(c, ContinueX, ContinueY, ContinueW, ContinueH, "CONTINUAR");
+                DrawButton(c, ContinueX, ContinueY, ContinueW, ContinueH, "CONTINUE");
             }
             c.ResetTint();
         }
@@ -826,36 +822,36 @@ namespace DeckDark.View
 
         void DrawTreasure(PixelCanvas c)
         {
-            DrawPaperSheet(c, "TESOURO");
+            DrawPaperSheet(c, "TREASURE");
             c.Sprite(Sprites.IconChest, 237, 132, ch => ch == 'a' ? Rgb.Hex(0xc09030) : (ch == 'b' ? Palette.Ink : Palette.Gold), false, 4);
             if (treasureRelic != null)
             {
                 PixelFont.Big.DrawCentered(c, treasureRelic.Name, 259, 176, Palette.DarkRed);
                 PixelFont.Big.DrawWrapped(c, treasureRelic.Description, 150, 192, 218, Palette.Ink, true);
-                DrawButton(c, ContinueX, ContinueY, ContinueW, ContinueH, "PEGAR");
+                DrawButton(c, ContinueX, ContinueY, ContinueW, ContinueH, "TAKE");
             }
             else
             {
-                PixelFont.Big.DrawWrapped(c, "O BAÚ ESTÁ VAZIO. ALGUÉM CHEGOU ANTES.", 150, 184, 218, Palette.Ink, true);
-                DrawButton(c, ContinueX, ContinueY, ContinueW, ContinueH, "SEGUIR");
+                PixelFont.Big.DrawWrapped(c, "THE CHEST IS EMPTY. SOMEONE GOT HERE FIRST.", 150, 184, 218, Palette.Ink, true);
+                DrawButton(c, ContinueX, ContinueY, ContinueW, ContinueH, "MOVE ON");
             }
             c.ResetTint();
         }
 
         void DrawTavern(PixelCanvas c)
         {
-            DrawPaperSheet(c, "PAUSA PRO LANCHE");
-            PixelFont.Big.DrawWrapped(c, "VOCÊS PARAM PRA COMER SALGADINHO. VOCÊ GRITA PRA MÃE DELE LÁ EM CIMA PEDINDO REFRIGERANTE. NINGUÉM RESPONDE.", 142, 128, 234, Palette.Ink);
+            DrawPaperSheet(c, "SNACK BREAK");
+            PixelFont.Big.DrawWrapped(c, "YOU STOP TO EAT CHIPS. YOU YELL UPSTAIRS, ASKING HIS MOM FOR SODA. NOBODY ANSWERS.", 142, 128, 234, Palette.Ink);
             if (tavernResult == null)
             {
-                int pct = (int)(HouseRules.TavernHealFraction(run.RulesVersion) * 100);
-                DrawChoice(c, 0, "DESCANSAR  [CURA " + pct + "% DA VIDA]");
-                DrawChoice(c, 1, "TREINAR  [FOR +2 PERMANENTE]");
+                int pct = (int)(Homebrew.TavernHealFraction(run.RulesVersion) * 100);
+                DrawChoice(c, 0, "REST  [HEAL " + pct + "% OF YOUR HP]");
+                DrawChoice(c, 1, "TRAIN  [+2 STR, PERMANENT]");
             }
             else
             {
                 PixelFont.Big.DrawWrapped(c, tavernResult, 142, 194, 234, Palette.DarkRed);
-                DrawButton(c, ContinueX, ContinueY, ContinueW, ContinueH, "CONTINUAR");
+                DrawButton(c, ContinueX, ContinueY, ContinueW, ContinueH, "CONTINUE");
             }
             c.ResetTint();
         }
@@ -872,10 +868,10 @@ namespace DeckDark.View
                 c.Line(SheetX + 6 + i, SheetY + 10, SheetX + SheetW - 8 + i, SheetY + SheetH - 12, Palette.Red);
                 c.Line(SheetX + SheetW - 8 + i, SheetY + 10, SheetX + 6 + i, SheetY + SheetH - 12, Palette.Red);
             }
-            PixelFont.Big.DrawCentered(c, "MORTO", SheetX + SheetW / 2 + 1, SheetY + 70, Palette.Black, 2);
-            PixelFont.Big.DrawCentered(c, "MORTO", SheetX + SheetW / 2, SheetY + 69, Palette.Red, 2);
-            PixelFont.Big.DrawCentered(c, "SEU PERSONAGEM MORREU", 256, 150, Palette.Red, 2);
-            PixelFont.Small.DrawCentered(c, "SESSÃO " + sessions + " - SALA " + run.Current.Layer + " DE 4", 256, 176, Palette.PaperDark);
+            PixelFont.Big.DrawCentered(c, "DEAD", SheetX + SheetW / 2 + 1, SheetY + 70, Palette.Black, 2);
+            PixelFont.Big.DrawCentered(c, "DEAD", SheetX + SheetW / 2, SheetY + 69, Palette.Red, 2);
+            PixelFont.Big.DrawCentered(c, "YOUR CHARACTER DIED", 256, 150, Palette.Red, 2);
+            PixelFont.Small.DrawCentered(c, "SESSION " + sessions + " - ROOM " + run.Current.Layer + " OF 4", 256, 176, Palette.PaperDark);
         }
 
         void DrawVictory(PixelCanvas c)
@@ -887,14 +883,14 @@ namespace DeckDark.View
             c.Fill(x, y, w, h, Rgb.Hex(0xe8e0c8));
             for (int ly = y + 22; ly < y + h; ly += 10) c.HLine(x + 2, x + w - 3, ly, Palette.PaperLine);
             c.VLine(x + 12, y, y + h - 1, Rgb.Hex(0xe0a0a0));
-            PixelFont.Big.DrawCentered(c, "REGRAS DA CASA", x + w / 2, y + 6, Palette.Ink);
-            int newest = RulesVersion;
-            for (int i = 0; i < newest && i < HouseRules.Texts.Length; i++)
+            PixelFont.Big.DrawCentered(c, "HOMEBREW RULES", x + w / 2, y + 6, Palette.Ink);
+            int newest = unlockedRules;
+            for (int i = 0; i < newest && i < Homebrew.Texts.Length; i++)
             {
-                bool isNew = i == newest - 1 && newest > 1;
+                bool isNew = newRulesUnlocked && i == newest - 1;
                 var col = isNew ? Palette.DarkRed : Palette.Ink;
                 int jx = isNew ? fxRng.Next(0, 2) : 0;
-                PixelFont.Small.DrawWrapped(c, HouseRules.Texts[i], x + 16 + jx, y + 26 + i * 26, w - 24, col);
+                PixelFont.Small.DrawWrapped(c, Homebrew.Texts[i], x + 16 + jx, y + 24 + i * 23, w - 24, col);
             }
             c.ResetTint();
         }

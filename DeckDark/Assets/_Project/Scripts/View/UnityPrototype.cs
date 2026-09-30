@@ -11,8 +11,8 @@ namespace DeckDark.View
     /// Ele se cria sozinho ao apertar Play em qualquer cena, desenha a tela de pixels
     /// ampliada, toca os sons e guarda o progresso (mortes, vitorias) no PlayerPrefs.
     ///
-    /// Para zerar o progresso: F9 durante o jogo, ou clique com o botao direito
-    /// no componente e escolha "Zerar progresso".
+    /// Para zerar o progresso: menu Options > Reset Progress, ou clique com o
+    /// botao direito no componente e escolha "Zerar progresso".
     /// </summary>
     public class UnityPrototype : MonoBehaviour, IGameHost
     {
@@ -92,6 +92,7 @@ namespace DeckDark.View
             var input = new GameInput();
             Vector2 mouse = Vector2.zero;
             bool click = false;
+            bool escape = false;
 #if ENABLE_INPUT_SYSTEM
             if (Mouse.current != null)
             {
@@ -101,12 +102,12 @@ namespace DeckDark.View
             if (Keyboard.current != null)
             {
                 if (Keyboard.current.spaceKey.wasPressedThisFrame || Keyboard.current.enterKey.wasPressedThisFrame) click = true;
-                if (Keyboard.current.f9Key.wasPressedThisFrame) ResetProgress();
+                if (Keyboard.current.escapeKey.wasPressedThisFrame) escape = true;
             }
 #else
             mouse = Input.mousePosition;
             click = Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.Space);
-            if (Input.GetKeyDown(KeyCode.F9)) ResetProgress();
+            escape = Input.GetKeyDown(KeyCode.Escape);
 #endif
             // Mouse do Unity comeca embaixo; o prototipo comeca em cima
             float guiY = Screen.height - mouse.y;
@@ -114,6 +115,7 @@ namespace DeckDark.View
             input.Y = Mathf.FloorToInt((guiY - drawRect.y) / scale);
             // ignora o clique no botao Play do editor, que chega no primeiro frame
             input.Click = click && Time.unscaledTime - startTime > 0.4f;
+            input.Escape = escape;
 
             game.Update(Time.unscaledDeltaTime, input);
             UploadCanvas();
@@ -166,7 +168,22 @@ namespace DeckDark.View
             sfxSource.PlayOneShot(clip, volume * 0.8f);
         }
 
-        public int LoadInt(string key) { return PlayerPrefs.GetInt("deckdark_" + key, 0); }
+        public int LoadInt(string key, int defaultValue) { return PlayerPrefs.GetInt("deckdark_" + key, defaultValue); }
+
+        public void DeleteKey(string key)
+        {
+            PlayerPrefs.DeleteKey("deckdark_" + key);
+            PlayerPrefs.Save();
+        }
+
+        public void Quit()
+        {
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+            Application.Quit();
+#endif
+        }
 
         public void SaveInt(string key, int value)
         {
@@ -177,9 +194,8 @@ namespace DeckDark.View
         [ContextMenu("Zerar progresso")]
         public void ResetProgress()
         {
-            PlayerPrefs.DeleteKey("deckdark_deaths");
-            PlayerPrefs.DeleteKey("deckdark_wins");
-            PlayerPrefs.DeleteKey("deckdark_sessions");
+            foreach (var k in new[] { "deaths", "wins", "sessions", "unlocked", "selected" })
+                PlayerPrefs.DeleteKey("deckdark_" + k);
             PlayerPrefs.Save();
             game = new GameApp(this);
             Debug.Log("DeckDark: progresso zerado.");

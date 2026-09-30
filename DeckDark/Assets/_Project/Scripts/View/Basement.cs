@@ -150,7 +150,7 @@ namespace DeckDark.View
             c.FillCircle(px + 20, py + 34, 9, Rgb.Hex(0xd89a50));
             c.Fill(px, py + 36, pw, ph - 36, Rgb.Hex(0x4a2e58));
             PixelFont.Small.DrawCentered(c, "DISCO", px + 20, py + 3, Rgb.Hex(0xe8c080));
-            PixelFont.Small.DrawCentered(c, "NOITE 78", px + 20, py + 44, Rgb.Hex(0xc0a0c8));
+            PixelFont.Small.DrawCentered(c, "NIGHT 78", px + 20, py + 44, Rgb.Hex(0xc0a0c8));
             c.Rect(px, py, pw, ph, Rgb.Hex(0x2a1e2a));
             c.Set(px + 2, py + 2, Palette.Gold); c.Set(px + pw - 3, py + 2, Palette.Gold);
             if (deaths >= 1)
@@ -169,7 +169,7 @@ namespace DeckDark.View
                 c.Fill(x, y, 2, 2, Rgb.Hex(0xa8b070));
             }
             c.Set(px + 36, py + 27, Palette.Black); c.Set(px + 37, py + 27, Palette.Black);
-            PixelFont.Small.DrawCentered(c, "TURNÊ 91", px + 21, py + 42, Rgb.Hex(0x98a0a0));
+            PixelFont.Small.DrawCentered(c, "TOUR 91", px + 21, py + 42, Rgb.Hex(0x98a0a0));
             c.Rect(px, py, pw, ph, Rgb.Hex(0x121414));
             c.Fill(px + 17, py - 2, 8, 4, Rgb.Hex(0xb0a890)); // fita adesiva
             if (deaths >= 2)
@@ -195,10 +195,10 @@ namespace DeckDark.View
         {
             c.Fill(300, 20, 178, 3, Rgb.Hex(0x4e3420));
             c.HLine(300, 477, 23, Rgb.Hex(0x1e140c));
-            DrawBox(c, 306, 6, 36, 14, "NATAL");
-            DrawBox(c, 346, 9, 30, 11, "PAI");
-            DrawBox(c, 380, 4, 46, 16, "NÃO ABRIR");
-            DrawBox(c, 430, 10, 40, 10, "LIVROS");
+            DrawBox(c, 306, 6, 36, 14, "XMAS");
+            DrawBox(c, 346, 9, 30, 11, "DAD");
+            DrawBox(c, 380, 4, 46, 16, "DON'T OPEN");
+            DrawBox(c, 430, 10, 40, 10, "BOOKS");
         }
 
         static void DrawBox(PixelCanvas c, int x, int y, int w, int h, string label)
@@ -221,7 +221,7 @@ namespace DeckDark.View
             c.FillTriangle(398, 222, 432, 214, 428, 250, Rgb.Hex(0xe0a020));
             c.FillTriangle(398, 222, 428, 250, 400, 254, Rgb.Hex(0xd08a18));
             c.Line(398, 222, 432, 214, Rgb.Hex(0x9a5a10));
-            PixelFont.Small.Draw(c, "CROC", 406, 232, Rgb.Hex(0x8a2010));
+            PixelFont.Small.Draw(c, "CHIPS", 406, 232, Rgb.Hex(0x8a2010));
             for (int i = 0; i < 7; i++) c.Fill(386 + i * 5, 250 + (i % 3) * 3, 3, 2, Rgb.Hex(0xe8b040));
             // lapis
             c.Line(134, 262, 170, 250, Rgb.Hex(0xe0b830));
@@ -358,8 +358,8 @@ namespace DeckDark.View
             c.Line(258, 98, 262, 104, d); c.Line(246, 104, 250, 114, d); c.Line(232, 100, 228, 94, d);
             c.Line(228, 94, 236, 96, d);
             c.Set(260, 100, Palette.Red);
-            PixelFont.Small.DrawCentered(c, "MESTRE", 240, 117, trim);
-            PixelFont.Small.DrawCentered(c, "D&D", 191, 104, trim);
+            PixelFont.Small.DrawCentered(c, "MASTER", 240, 117, trim);
+            PixelFont.Small.DrawCentered(c, "RPG", 191, 104, trim);
             PixelFont.Small.DrawCentered(c, "1991", 289, 104, trim);
             if (run != null && run.RulesVersion >= 2)
             {

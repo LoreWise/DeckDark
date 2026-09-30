@@ -26,45 +26,45 @@ namespace DeckDark.Core
     {
         public static readonly EnemyDef Goblin = new EnemyDef
         {
-            Name = "GOBLIN BATEDOR", Sprite = EnemySprite.Goblin, MaxHp = 14, ArmorClass = 12,
+            Name = "GOBLIN SCOUT", Sprite = EnemySprite.Goblin, MaxHp = 14, ArmorClass = 12,
             Pattern = new[]
             {
-                new EnemyMove { Name = "FACADA", Kind = MoveKind.Attack, AttackBonus = 4, Damage = new DiceExpr(1, 6, 2) },
-                new EnemyMove { Name = "FACADA", Kind = MoveKind.Attack, AttackBonus = 4, Damage = new DiceExpr(1, 6, 2) },
-                new EnemyMove { Name = "SE ESCONDER", Kind = MoveKind.Guard, Guard = 5 },
+                new EnemyMove { Name = "STAB", Kind = MoveKind.Attack, AttackBonus = 4, Damage = new DiceExpr(1, 6, 2) },
+                new EnemyMove { Name = "STAB", Kind = MoveKind.Attack, AttackBonus = 4, Damage = new DiceExpr(1, 6, 2) },
+                new EnemyMove { Name = "HIDE", Kind = MoveKind.Guard, Guard = 5 },
             }
         };
 
         public static readonly EnemyDef Skeleton = new EnemyDef
         {
-            Name = "ESQUELETO", Sprite = EnemySprite.Skeleton, MaxHp = 22, ArmorClass = 13,
+            Name = "SKELETON", Sprite = EnemySprite.Skeleton, MaxHp = 22, ArmorClass = 13,
             Pattern = new[]
             {
-                new EnemyMove { Name = "ESPADA ENFERRUJADA", Kind = MoveKind.Attack, AttackBonus = 4, Damage = new DiceExpr(1, 8, 2) },
-                new EnemyMove { Name = "ERGUER OSSOS", Kind = MoveKind.Guard, Guard = 6 },
-                new EnemyMove { Name = "GOLPE PESADO", Kind = MoveKind.Attack, AttackBonus = 3, Damage = new DiceExpr(2, 6, 2) },
+                new EnemyMove { Name = "RUSTY SWORD", Kind = MoveKind.Attack, AttackBonus = 4, Damage = new DiceExpr(1, 8, 2) },
+                new EnemyMove { Name = "RATTLE BONES", Kind = MoveKind.Guard, Guard = 6 },
+                new EnemyMove { Name = "HEAVY BLOW", Kind = MoveKind.Attack, AttackBonus = 3, Damage = new DiceExpr(2, 6, 2) },
             }
         };
 
         public static readonly EnemyDef Cultist = new EnemyDef
         {
-            Name = "CULTISTA MASCARADO", Sprite = EnemySprite.Cultist, MaxHp = 27, ArmorClass = 12,
+            Name = "MASKED CULTIST", Sprite = EnemySprite.Cultist, MaxHp = 27, ArmorClass = 12,
             Pattern = new[]
             {
-                new EnemyMove { Name = "SUSSURRAR", Kind = MoveKind.Curse },
-                new EnemyMove { Name = "ADAGA RITUAL", Kind = MoveKind.Attack, AttackBonus = 5, Damage = new DiceExpr(1, 8, 3) },
-                new EnemyMove { Name = "ADAGA RITUAL", Kind = MoveKind.Attack, AttackBonus = 5, Damage = new DiceExpr(1, 8, 3) },
+                new EnemyMove { Name = "WHISPER", Kind = MoveKind.Curse },
+                new EnemyMove { Name = "RITUAL DAGGER", Kind = MoveKind.Attack, AttackBonus = 5, Damage = new DiceExpr(1, 8, 3) },
+                new EnemyMove { Name = "RITUAL DAGGER", Kind = MoveKind.Attack, AttackBonus = 5, Damage = new DiceExpr(1, 8, 3) },
             }
         };
 
         public static readonly EnemyDef Boss = new EnemyDef
         {
-            Name = "O REI SEM ROSTO", Sprite = EnemySprite.Boss, MaxHp = 56, ArmorClass = 14, IsBoss = true,
+            Name = "THE FACELESS KING", Sprite = EnemySprite.Boss, MaxHp = 56, ArmorClass = 14, IsBoss = true,
             Pattern = new[]
             {
-                new EnemyMove { Name = "GOLPE DA COROA", Kind = MoveKind.Attack, AttackBonus = 6, Damage = new DiceExpr(1, 10, 4) },
-                new EnemyMove { Name = "NÉVOA", Kind = MoveKind.Curse },
-                new EnemyMove { Name = "ESMAGAR", Kind = MoveKind.Attack, AttackBonus = 5, Damage = new DiceExpr(2, 8, 4) },
+                new EnemyMove { Name = "CROWN STRIKE", Kind = MoveKind.Attack, AttackBonus = 6, Damage = new DiceExpr(1, 10, 4) },
+                new EnemyMove { Name = "MIST", Kind = MoveKind.Curse },
+                new EnemyMove { Name = "CRUSH", Kind = MoveKind.Attack, AttackBonus = 5, Damage = new DiceExpr(2, 8, 4) },
             }
         };
     }

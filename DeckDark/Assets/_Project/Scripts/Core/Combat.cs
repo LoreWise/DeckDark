@@ -29,6 +29,8 @@ namespace DeckDark.Core
         public int Damage;
         public int Blocked;
         public bool AddedCurse;
+        public bool Rerolled;        // Homebrew v5: o mestre rolou de novo
+        public TestRoll FirstRoll;
         public int GuardGained;
     }
 
@@ -54,6 +56,7 @@ namespace DeckDark.Core
         public bool NextAttackAdvantage;
         bool firstAttackDone;
         public int Turn;
+        public bool EnemyCanReroll;
 
         public readonly List<CardDef> DrawPile = new List<CardDef>();
         public readonly List<CardDef> Hand = new List<CardDef>();
@@ -182,6 +185,13 @@ namespace DeckDark.Core
                 {
                     r.Hidden = HiddenRolls;
                     r.Roll = dice.Test(move.AttackBonus - EnemyWeaken, PlayerArmorClass, false, false);
+                    if (!r.Roll.Success && EnemyCanReroll)
+                    {
+                        EnemyCanReroll = false;
+                        r.Rerolled = true;
+                        r.FirstRoll = r.Roll;
+                        r.Roll = dice.Test(move.AttackBonus - EnemyWeaken, PlayerArmorClass, false, false);
+                    }
                     EnemyWeaken = 0;
                     r.Hit = r.Roll.Success;
                     r.AnnouncedTotal = r.Roll.Total;

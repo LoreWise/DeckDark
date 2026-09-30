@@ -89,8 +89,26 @@ namespace DeckDark.View
 
         public void FillAlpha(int x, int y, int w, int h, Rgb c, float a)
         {
-            for (int j = y; j < y + h; j++)
-                for (int i = x; i < x + w; i++) Blend(i, j, c, a);
+            // versao rapida: recorta o retangulo uma vez e mistura com inteiros
+            x += OffX; y += OffY;
+            int x0 = Math.Max(0, x), y0 = Math.Max(0, y);
+            int x1 = Math.Min(W, x + w), y1 = Math.Min(H, y + h);
+            if (x0 >= x1 || y0 >= y1) return;
+            var t = Tinted(c);
+            int ia = (int)(Math.Max(0f, Math.Min(1f, a)) * 256);
+            int cr = t.R, cg = t.G, cb = t.B;
+            for (int j = y0; j < y1; j++)
+            {
+                int row = j * W;
+                for (int i = x0; i < x1; i++)
+                {
+                    var p = Px[row + i];
+                    p.R = (byte)(p.R + (((cr - p.R) * ia) >> 8));
+                    p.G = (byte)(p.G + (((cg - p.G) * ia) >> 8));
+                    p.B = (byte)(p.B + (((cb - p.B) * ia) >> 8));
+                    Px[row + i] = p;
+                }
+            }
         }
 
         /// <summary>Preenche alternando duas cores em xadrez: textura classica de pixel art.</summary>

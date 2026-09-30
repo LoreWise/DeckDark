@@ -8,37 +8,46 @@ namespace DeckDark.View
     public interface IGameHost
     {
         void PlaySfx(string id, float volume);
-        int LoadInt(string key);
+        int LoadInt(string key, int defaultValue);
         void SaveInt(string key, int value);
+        void DeleteKey(string key);
+        void Quit();
     }
 
     public struct GameInput
     {
         public int X, Y;      // posicao do mouse em pixels virtuais
         public bool Click;
+        public bool Escape;
     }
 
-    public enum GameScreen { Title, Intro, Map, Combat, Reward, Event, Treasure, Tavern, Death, Victory }
+    public enum GameScreen { Menu, NewGame, Options, Intro, Map, Combat, Reward, Event, Treasure, Tavern, Death, Victory }
+
+    public enum GameSpeed { Slow, Normal, Fast }
 
     /// <summary>
     /// O prototipo inteiro: telas, fluxo da run e animacoes.
     /// A logica de regras fica em DeckDark.Core; aqui so se decide o que mostrar e quando.
-    /// Esta dividido em tres arquivos: GameApp (fluxo), GameRender (desenho) e Basement (cenario).
+    /// Arquivos: GameApp (fluxo), Menus (menu, opcoes, pausa), GameRender (desenho) e Basement (cenario).
     /// </summary>
     public partial class GameApp
     {
         public const int W = 480, H = 270;
+        public const string Title = "DARK DECK";
 
         readonly IGameHost host;
         public readonly PixelCanvas Canvas = new PixelCanvas(W, H);
 
-        GameScreen screen = GameScreen.Title;
+        GameScreen screen = GameScreen.Menu;
         float time;
         GameInput input;
         readonly Random fxRng = new Random(1234);
 
         // Progresso salvo entre sessoes
         int deaths, wins, sessions;
+        int unlockedRules;     // maior versao de Homebrew liberada
+        int selectedRules;     // versao escolhida para a proxima partida
+        GameSpeed speed;
 
         RunState run;
         Combat combat;
@@ -46,7 +55,6 @@ namespace DeckDark.View
         // ---------- Fala do amigo ----------
         class SpeechLine
         {
-            public string Speaker;
             public string Text;
             public bool WaitClick;
             public Action OnStart;
@@ -96,18 +104,48 @@ namespace DeckDark.View
         string eventResult;
         bool eventResolved;
         string tavernResult;
+        bool newRulesUnlocked;
 
         public GameApp(IGameHost host)
         {
             this.host = host;
-            deaths = host.LoadInt("deaths");
-            wins = host.LoadInt("wins");
-            sessions = host.LoadInt("sessions");
-            maskOn = sessions > 0;
+            LoadProgress();
             BuildStaticScene();
         }
 
-        int RulesVersion { get { return Math.Min(1 + wins, HouseRules.Texts.Length); } }
+        void LoadProgress()
+        {
+            deaths = host.LoadInt("deaths", 0);
+            wins = host.LoadInt("wins", 0);
+            sessions = host.LoadInt("sessions", 0);
+            // Quem jogou a versao anterior ja liberou versoes com as vitorias antigas
+            unlockedRules = Math.Max(1, Math.Min(Homebrew.MaxVersion, host.LoadInt("unlocked", 1 + wins)));
+            selectedRules = Math.Max(1, Math.Min(unlockedRules, host.LoadInt("selected", unlockedRules)));
+            speed = (GameSpeed)Math.Max(0, Math.Min(2, host.LoadInt("speed", (int)GameSpeed.Normal)));
+            maskOn = sessions > 0;
+        }
+
+        /// <summary>Multiplicador de todas as animacoes. Escolhido em Options.</summary>
+        float SpeedFactor
+        {
+            get
+            {
+                switch (speed)
+                {
+                    case GameSpeed.Slow: return 0.6f;
+                    case GameSpeed.Fast: return 1.8f;
+                    default: return 1f;
+                }
+            }
+        }
+
+        bool InRun
+        {
+            get
+            {
+                return run != null && screen != GameScreen.Menu && screen != GameScreen.NewGame && screen != GameScreen.Options;
+            }
+        }
 
         /// <summary>0 = tudo normal, 1 = pesadelo. Cresce com o andar e com as mortes.</summary>
         float Dread
@@ -115,7 +153,7 @@ namespace DeckDark.View
             get
             {
                 float d = 0.08f * Math.Min(deaths, 5);
-                if (run != null && screen != GameScreen.Title) d += 0.12f * run.Current.Layer;
+                if (InRun) d += 0.12f * run.Current.Layer;
                 if (combat != null && combat.HiddenRolls && screen == GameScreen.Combat) d += 0.2f;
                 if (screen == GameScreen.Death) d += 0.15f;
                 return Math.Min(1f, d);
@@ -131,12 +169,18 @@ namespace DeckDark.View
         public void Update(float dt, GameInput inp)
         {
             if (dt > 0.1f) dt = 0.1f;
-            time += dt;
             input = inp;
+            time += dt;
 
-            UpdateBeats(dt);
-            UpdateSpeech(dt);
-            UpdateFx(dt);
+            if (input.Escape) HandleEscape();
+
+            if (!paused)
+            {
+                float adt = dt * SpeedFactor;
+                UpdateBeats(adt);
+                UpdateSpeech(adt);
+                UpdateFx(dt, adt);
+            }
 
             if (input.Click) HandleClick();
             Render();
@@ -146,7 +190,6 @@ namespace DeckDark.View
         {
             if (beats.Count == 0) { beatCursor = 0; return; }
             beatCursor += dt;
-            // executa em ordem; uma acao pode agendar outras
             int guard = 0;
             while (beats.Count > 0 && beats[0].At <= beatCursor && guard++ < 50)
             {
@@ -171,11 +214,11 @@ namespace DeckDark.View
                 if (speechQueue.Count > 0) StartLine(speechQueue.Dequeue());
                 return;
             }
-            speechTyped += dt * 45f;
+            speechTyped += dt * 38f;
             if (speechTyped >= speech.Text.Length)
             {
                 speechHold += dt;
-                if (!speech.WaitClick && speechHold > 2.2f + speech.Text.Length * 0.03f)
+                if (!speech.WaitClick && speechHold > 2.8f + speech.Text.Length * 0.035f)
                 {
                     speech = null;
                     if (speechQueue.Count > 0) StartLine(speechQueue.Dequeue());
@@ -191,14 +234,14 @@ namespace DeckDark.View
             if (l.OnStart != null) l.OnStart();
         }
 
-        string FriendName { get { return !maskOn ? "RAFA" : (Dread > 0.6f ? "???" : "O MESTRE"); } }
+        string FriendName { get { return !maskOn ? "RAFA" : (Dread > 0.6f ? "???" : "THE MASTER"); } }
 
         /// <summary>Um comentario do amigo que some sozinho e nao trava o jogo.</summary>
         void Say(string text)
         {
             if (scriptActive) return;
             speechQueue.Clear();
-            StartLine(new SpeechLine { Speaker = FriendName, Text = text });
+            StartLine(new SpeechLine { Text = text });
         }
 
         /// <summary>Uma sequencia de falas que espera cliques. Trava o resto ate terminar.</summary>
@@ -232,27 +275,36 @@ namespace DeckDark.View
             }
         }
 
-        void UpdateFx(float dt)
+        void ClearSpeech()
+        {
+            speechQueue.Clear();
+            speech = null;
+            scriptActive = false;
+            scriptDone = null;
+        }
+
+        /// <summary>dt = tempo real (luz, tremor); adt = tempo de animacao (afetado pela velocidade).</summary>
+        void UpdateFx(float dt, float adt)
         {
             if (dice != null)
             {
                 if (dice.Rolling > 0)
                 {
-                    dice.Rolling -= dt;
-                    dice.Flicker = fxRng.Next(1, 21);
+                    dice.Rolling -= adt;
+                    if (((int)(time * 30)) % 2 == 0) dice.Flicker = fxRng.Next(1, 21);
                 }
-                else dice.Life -= dt;
+                else dice.Life -= adt;
                 if (dice.Life <= 0) dice = null;
             }
             for (int i = floaters.Count - 1; i >= 0; i--)
             {
-                floaters[i].T += dt;
-                floaters[i].Y -= dt * 14f;
-                if (floaters[i].T > 1.3f) floaters.RemoveAt(i);
+                floaters[i].T += adt;
+                floaters[i].Y -= adt * 10f;
+                if (floaters[i].T > 1.8f) floaters.RemoveAt(i);
             }
             shake = Math.Max(0, shake - dt * 12f);
-            enemyHurt = Math.Max(0, enemyHurt - dt * 3f);
-            playerHurt = Math.Max(0, playerHurt - dt * 3f);
+            enemyHurt = Math.Max(0, enemyHurt - adt * 2.5f);
+            playerHurt = Math.Max(0, playerHurt - adt * 2.5f);
             lampFlash = Math.Max(0, lampFlash - dt * 2f);
 
             // Piscadas da lampada: mais frequentes conforme o clima piora
@@ -275,12 +327,21 @@ namespace DeckDark.View
 
         void HandleClick()
         {
+            if (paused) { ClickPause(); return; }
+
+            switch (screen)
+            {
+                case GameScreen.Menu: ClickMenu(); return;
+                case GameScreen.NewGame: ClickNewGame(); return;
+                case GameScreen.Options: ClickOptions(); return;
+            }
+
+            if (InRun && Hover(MenuTagX, MenuTagY, MenuTagW, MenuTagH)) { OpenPause(); return; }
             if (scriptActive) { AdvanceScript(); return; }
             if (Busy) return;
 
             switch (screen)
             {
-                case GameScreen.Title: StartSession(); break;
                 case GameScreen.Map: ClickMap(); break;
                 case GameScreen.Combat: ClickCombat(); break;
                 case GameScreen.Reward: ClickReward(); break;
@@ -306,38 +367,56 @@ namespace DeckDark.View
             Sfx("click");
             sessions++;
             host.SaveInt("sessions", sessions);
+            host.SaveInt("selected", selectedRules);
             BuildStaticScene();
-            run = new RunState(Environment.TickCount, RulesVersion);
+            run = new RunState(Environment.TickCount, selectedRules);
             combat = null;
+            beats.Clear();
+            dice = null;
+            floaters.Clear();
             screen = GameScreen.Intro;
             shownPlayerHp = run.Sheet.Hp;
 
             var lines = new List<SpeechLine>();
             if (sessions == 1)
             {
-                lines.Add(L("BELEZA, SENTA AÍ. PASSEI A SEMANA INTEIRA FAZENDO ESSA CAMPANHA."));
-                lines.Add(L("PERA. ACHEI UMA COISA NUMA CAIXA DO MEU PAI."));
-                lines.Add(L("PRONTO. AGORA EU SOU O MESTRE.", () => { maskOn = true; lampDip = 1f; shake = 2f; Sfx("flicker", 0.8f); Sfx("curse", 0.6f); }));
+                lines.Add(L("OK, SIT DOWN. I SPENT ALL WEEK MAKING THIS CAMPAIGN."));
+                lines.Add(L("WAIT. I FOUND SOMETHING IN ONE OF MY DAD'S BOXES."));
+                lines.Add(L("THERE. NOW I'M THE MASTER.", () => { maskOn = true; lampDip = 1f; shake = 2f; Sfx("flicker", 0.8f); Sfx("curse", 0.6f); }));
             }
-            else if (deaths > 0 && wins == 0)
+            else if (wins == 0)
             {
                 string[] again =
                 {
-                    "DE NOVO.",
-                    "VOCÊ SEMPRE ESCOLHE O GUERREIRO.",
-                    "TEM MAIS FICHAS NA GAVETA. MUITAS.",
-                    "SUA MÃE NÃO VEM TE BUSCAR. EU PERGUNTEI.",
+                    "YOU'RE BACK.",
+                    "AGAIN.",
+                    "YOU ALWAYS PICK THE WARRIOR.",
+                    "THERE ARE MORE SHEETS IN THE DRAWER. LOTS OF THEM.",
+                    "YOUR MOM ISN'T COMING TO PICK YOU UP. I ASKED.",
                 };
-                lines.Add(L(again[Math.Min(deaths - 1, again.Length - 1)]));
+                lines.Add(L(again[Math.Min(deaths, again.Length - 1)]));
             }
             else
             {
-                lines.Add(L("OUTRA CAMPANHA. EU TROUXE REGRAS NOVAS."));
+                lines.Add(L("ANOTHER CAMPAIGN. SAME TABLE. SAME DICE."));
             }
-            lines.Add(L("SEU GUERREIRO CHEGA NA ENTRADA DA MASMORRA DO REI SEM ROSTO."));
-            lines.Add(L("TRÊS SALAS ATÉ ELE. ESCOLHE O CAMINHO."));
-            foreach (var l in lines) l.Speaker = null; // o nome e resolvido na hora de desenhar
+            if (selectedRules > 1) lines.Add(L("HOMEBREW V" + selectedRules + ".0 TODAY. YOU ASKED FOR IT."));
+            lines.Add(L("YOUR WARRIOR REACHES THE ENTRANCE OF THE FACELESS KING'S DUNGEON."));
+            lines.Add(L("THREE ROOMS UNTIL YOU REACH HIM. CHOOSE YOUR PATH."));
             Script(() => { screen = GameScreen.Map; }, lines.ToArray());
+        }
+
+        void EndRunToMenu()
+        {
+            ClearSpeech();
+            beats.Clear();
+            dice = null;
+            floaters.Clear();
+            run = null;
+            combat = null;
+            paused = false;
+            screen = GameScreen.Menu;
+            BuildStaticScene();
         }
 
         // ---------------- Mapa ----------------
@@ -348,7 +427,7 @@ namespace DeckDark.View
             if (node == null || !run.CanTravelTo(node)) return;
             Sfx("pencil");
             run.TravelTo(node);
-            Then(0.35f, () => EnterNode(node));
+            Then(0.5f, () => EnterNode(node));
         }
 
         void EnterNode(MapNode node)
@@ -364,17 +443,17 @@ namespace DeckDark.View
                     eventResult = null;
                     eventResolved = false;
                     screen = GameScreen.Event;
-                    if (currentEvent.Id == "mirror") Say("ESSE EU NÃO ESCREVI.");
+                    if (currentEvent.Id == "mirror") Say("I DIDN'T WRITE THAT ONE.");
                     break;
                 case NodeType.Treasure:
                     treasureRelic = run.RollRelic();
                     screen = GameScreen.Treasure;
-                    Say("UM BAÚ. PODE ABRIR. DESSA VEZ NÃO É ARMADILHA.");
+                    Say("A CHEST. GO AHEAD. IT'S NOT A TRAP THIS TIME.");
                     break;
                 case NodeType.Tavern:
                     tavernResult = null;
                     screen = GameScreen.Tavern;
-                    Say("PAUSA PRO LANCHE.");
+                    Say("SNACK BREAK.");
                     break;
             }
         }
@@ -384,16 +463,17 @@ namespace DeckDark.View
             screen = GameScreen.Map;
             combat = null;
             int layer = run.Current.Layer;
-            if (layer == 1) Say("TÁ FICANDO TARDE, NÉ?");
-            else if (layer == 2) Say("NINGUÉM VAI DESCER AQUI. PODE FICAR TRANQUILO.");
-            else if (layer == 3) Say("ELE ESTÁ TE ESPERANDO.");
+            if (layer == 1) Say("IT'S GETTING LATE, HUH?");
+            else if (layer == 2) Say("NOBODY'S COMING DOWN HERE. DON'T WORRY.");
+            else if (layer == 3) Say("HE'S WAITING FOR YOU.");
         }
 
         // ---------------- Combate ----------------
 
         void StartCombat(EnemyDef enemy)
         {
-            combat = new Combat(run.Sheet, enemy, run.Dice, HouseRules.EnemyArmorBonus(run.RulesVersion));
+            combat = new Combat(run.Sheet, enemy, run.Dice, Homebrew.EnemyArmorBonus(run.RulesVersion));
+            combat.EnemyCanReroll = Homebrew.EnemyReroll(run.RulesVersion);
             screen = GameScreen.Combat;
             enemyFade = 0;
             shownEnemyHp = combat.EnemyHp;
@@ -402,8 +482,8 @@ namespace DeckDark.View
             combat.StartPlayerTurn();
             shownBlock = 0;
             Sfx("card", 0.6f);
-            if (enemy.IsBoss) Say("O REI SEM ROSTO. ELE NÃO TEM ROSTO PORQUE DEU O DELE PRA MIM.");
-            else Say("UM " + enemy.Name + " APARECE. ROLA A INICIATIVA... BRINCADEIRA. VOCÊ COMEÇA.");
+            if (enemy.IsBoss) Say("THE FACELESS KING. HE HAS NO FACE BECAUSE HE GAVE IT TO ME.");
+            else Say("A " + enemy.Name + " APPEARS. ROLL FOR INITIATIVE... JUST KIDDING. YOU GO FIRST.");
         }
 
         void ClickCombat()
@@ -422,14 +502,14 @@ namespace DeckDark.View
             if (card.Unplayable)
             {
                 Sfx("curse", 0.4f);
-                Say("NÃO DÁ PRA USAR ISSO. NUNCA DÁ.");
+                Say("YOU CAN'T USE THAT. YOU NEVER CAN.");
                 shake = 1.5f;
                 return;
             }
             if (!combat.CanPlay(card))
             {
                 Sfx("miss", 0.5f);
-                Float(CardCenterX(idx), 180, "SEM ENERGIA", Palette.Red);
+                Float(CardCenterX(idx), 180, "NO ENERGY", Palette.Red);
                 return;
             }
             PlayCard(idx);
@@ -444,42 +524,43 @@ namespace DeckDark.View
             foreach (var ar in res.Attacks)
             {
                 var a = ar;
-                Then(0.05f, () => ShowRoll(a.Roll, false, 0, "SEU ATAQUE"));
-                Then(0.75f, () => ResolvePlayerAttack(a));
-                Then(0.45f, () => { });
+                Then(0.05f, () => ShowRoll(a.Roll, false, 0, "YOUR ATTACK"));
+                Then(1.35f, () => ResolvePlayerAttack(a));
+                Then(0.7f, () => { });
             }
             if (res.BlockGained > 0)
             {
-                Then(0.05f, () =>
+                Then(0.1f, () =>
                 {
                     Sfx("block");
                     shownBlock = combat.Block;
-                    Float(PlayerMiniX, 142, "+" + res.BlockGained + " BLOQUEIO", Palette.Blue);
+                    Float(PlayerMiniX, 142, "+" + res.BlockGained + " BLOCK", Palette.Blue);
                 });
             }
             if (res.Card.ArmorThisTurn > 0)
             {
-                Then(0.05f, () => Float(PlayerMiniX, 132, "+" + res.Card.ArmorThisTurn + " CA", Palette.Blue));
+                Then(0.1f, () => Float(PlayerMiniX, 132, "+" + res.Card.ArmorThisTurn + " AC", Palette.Blue));
             }
             if (res.Healed > 0)
             {
-                Then(0.05f, () =>
+                Then(0.1f, () =>
                 {
                     Sfx("heal");
                     shownPlayerHp = run.Sheet.Hp;
-                    Float(PlayerMiniX, 142, "+" + res.Healed + " PV", Palette.Green);
+                    Float(PlayerMiniX, 142, "+" + res.Healed + " HP", Palette.Green);
                 });
             }
-            if (res.Card.GrantAdvantage) Then(0.05f, () => Float(PlayerMiniX, 142, "VANTAGEM!", Palette.Gold));
-            if (res.Card.WeakenEnemy > 0) Then(0.05f, () => Float(EnemyMiniX, 132, "-" + res.Card.WeakenEnemy + " ACERTO", Palette.Gold));
-            Then(0.1f, CheckCombatEnd);
+            if (res.Card.GrantAdvantage) Then(0.1f, () => Float(PlayerMiniX, 142, "ADVANTAGE!", Palette.Gold));
+            if (res.Card.WeakenEnemy > 0) Then(0.1f, () => Float(EnemyMiniX, 132, "-" + res.Card.WeakenEnemy + " TO HIT", Palette.Gold));
+            if (res.Drawn > 0) Then(0.1f, () => Sfx("card", 0.5f));
+            Then(0.3f, CheckCombatEnd);
         }
 
         void ShowRoll(TestRoll roll, bool hidden, int announced, string label)
         {
             dice = new DiceFx
             {
-                X = 257, Y = 146, Roll = roll, Rolling = hidden ? 1.1f : 0.65f, Life = 1.2f,
+                X = 257, Y = 146, Roll = roll, Rolling = hidden ? 1.6f : 1.1f, Life = 1.8f,
                 Hidden = hidden, Announced = announced, Label = label
             };
             Sfx("dice");
@@ -489,20 +570,20 @@ namespace DeckDark.View
         {
             if (a.Roll.Success)
             {
-                if (a.Roll.IsCrit) { Sfx("crit"); Say("HM. SORTE."); Float(EnemyMiniX, 128, "CRÍTICO!", Palette.Gold); }
+                if (a.Roll.IsCrit) { Sfx("crit"); Say("HM. LUCKY."); Float(EnemyMiniX, 128, "CRITICAL!", Palette.Gold); }
                 Sfx("hit");
                 shake = a.Roll.IsCrit ? 4f : 2f;
                 enemyHurt = 1f;
                 shownEnemyHp = Math.Max(0, shownEnemyHp - a.Damage);
                 shownEnemyBlock = combat.EnemyBlock;
                 if (a.Damage > 0) Float(EnemyMiniX, 138, "-" + a.Damage, Palette.Red);
-                if (a.Blocked > 0) Float(EnemyMiniX + 14, 148, "(" + a.Blocked + " BLOQ.)", Palette.Blue);
+                if (a.Blocked > 0) Float(EnemyMiniX + 14, 148, "(" + a.Blocked + " BLOCKED)", Palette.Blue);
             }
             else
             {
                 Sfx("miss");
-                if (a.Roll.IsFumble) { Say("HEHE. UM."); Float(EnemyMiniX, 138, "FALHA CRÍTICA", Palette.Red); }
-                else Float(EnemyMiniX, 138, "ERROU", Palette.Paper);
+                if (a.Roll.IsFumble) { Say("HEHE. A ONE."); Float(EnemyMiniX, 138, "CRITICAL FAIL", Palette.Red); }
+                else Float(EnemyMiniX, 138, "MISS", Palette.Paper);
             }
         }
 
@@ -510,57 +591,69 @@ namespace DeckDark.View
         {
             Sfx("click");
             combat.DiscardHand();
-            bool wasHidden = combat.HiddenRolls;
-            var move = combat.Intent;
+            bool hiddenNow = combat.HiddenRolls;
+            // A jogada do inimigo e decidida agora; a tela mostra o resultado aos poucos.
+            var r = combat.EnemyAct();
+            bool attack = r.Move.Kind == MoveKind.Attack;
 
-            Then(0.35f, () => { });
-            if (move.Kind == MoveKind.Attack && wasHidden)
+            Then(0.5f, () => { });
+            if (attack && hiddenNow) Then(0.05f, () => Say("I'LL ROLL BACK HERE NOW, OK?"));
+
+            if (attack && r.Rerolled)
             {
-                Then(0.01f, () => Say("AGORA EU ROLO AQUI ATRÁS, TÁ?"));
-            }
-            EnemyTurnResult r = null;
-            Then(0.4f, () =>
-            {
-                r = combat.EnemyAct();
-                switch (r.Move.Kind)
+                Then(0.5f, () => ShowRoll(r.FirstRoll, r.Hidden, r.FirstRoll.Total, r.Move.Name));
+                Then(r.Hidden ? 2.0f : 1.6f, () =>
                 {
-                    case MoveKind.Attack:
-                        ShowRoll(r.Roll, r.Hidden, r.AnnouncedTotal, r.Move.Name);
-                        break;
-                    case MoveKind.Guard:
-                        Sfx("block");
-                        shownEnemyBlock = combat.EnemyBlock;
-                        Float(EnemyMiniX, 138, "+" + r.GuardGained + " BLOQUEIO", Palette.Blue);
-                        break;
-                    case MoveKind.Curse:
-                        Sfx("curse");
-                        lampDip = 0.9f;
-                        Float(PlayerMiniX, 132, "+PESADELO NO DESCARTE", Palette.Purple);
-                        break;
-                }
-            });
-            Then(move.Kind == MoveKind.Attack ? (wasHidden ? 1.2f : 0.8f) : 0.6f, () =>
+                    Say("NO. I'M ROLLING THAT AGAIN. HOMEBREW RULES.");
+                    Float(PlayerMiniX, 128, "REROLL!", Palette.Red);
+                    ShowRoll(r.Roll, r.Hidden, r.AnnouncedTotal, r.Move.Name + " (AGAIN)");
+                });
+            }
+            else
             {
-                if (r.Move.Kind != MoveKind.Attack) return;
-                if (r.Hidden) Say(r.Cheated ? "DEU " + r.AnnouncedTotal + ". ACERTOU. EU VI." : "DEU " + r.AnnouncedTotal + ".");
+                Then(0.5f, () =>
+                {
+                    switch (r.Move.Kind)
+                    {
+                        case MoveKind.Attack:
+                            ShowRoll(r.Roll, r.Hidden, r.AnnouncedTotal, r.Move.Name);
+                            break;
+                        case MoveKind.Guard:
+                            Sfx("block");
+                            shownEnemyBlock = combat.EnemyBlock;
+                            Float(EnemyMiniX, 138, "+" + r.GuardGained + " BLOCK", Palette.Blue);
+                            break;
+                        case MoveKind.Curse:
+                            Sfx("curse");
+                            lampDip = 0.9f;
+                            Float(PlayerMiniX, 132, "+NIGHTMARE IN DISCARD", Palette.Purple);
+                            break;
+                    }
+                });
+            }
+
+            Then(attack ? (r.Hidden ? 2.0f : 1.5f) : 0.9f, () =>
+            {
+                if (!attack) return;
+                if (r.Hidden) Say(r.Cheated ? "IT'S A " + r.AnnouncedTotal + ". HIT. I SAW IT." : "IT'S A " + r.AnnouncedTotal + ".");
                 if (r.Hit)
                 {
-                    if (r.Roll.IsCrit) { Sfx("crit"); Float(PlayerMiniX, 128, "CRÍTICO!", Palette.Red); }
+                    if (r.Roll.IsCrit) { Sfx("crit"); Float(PlayerMiniX, 128, "CRITICAL!", Palette.Red); }
                     Sfx("hit");
                     shake = r.Roll.IsCrit ? 5f : 3f;
                     playerHurt = 1f;
                     shownPlayerHp = run.Sheet.Hp;
                     shownBlock = combat.Block;
                     if (r.Damage > 0) Float(PlayerMiniX, 138, "-" + r.Damage, Palette.Red);
-                    if (r.Blocked > 0) Float(PlayerMiniX + 14, 148, "(" + r.Blocked + " BLOQ.)", Palette.Blue);
+                    if (r.Blocked > 0) Float(PlayerMiniX + 14, 148, "(" + r.Blocked + " BLOCKED)", Palette.Blue);
                 }
                 else
                 {
                     Sfx("miss");
-                    Float(PlayerMiniX, 138, "ERROU", Palette.Paper);
+                    Float(PlayerMiniX, 138, "MISS", Palette.Paper);
                 }
             });
-            Then(0.6f, () =>
+            Then(0.9f, () =>
             {
                 if (combat.PlayerDead) { PlayerDied(); return; }
                 combat.StartPlayerTurn();
@@ -572,14 +665,14 @@ namespace DeckDark.View
         void CheckCombatEnd()
         {
             if (!combat.EnemyDead) return;
-            Then(0.3f, () => { enemyFade = 0.01f; Sfx("death", 0.35f); });
-            Then(1.0f, () =>
+            Then(0.5f, () => { enemyFade = 0.01f; Sfx("death", 0.35f); });
+            Then(1.4f, () =>
             {
                 if (run.Sheet.HasRelic(RelicId.RabbitFoot)) run.Sheet.Heal(4);
                 if (combat.Enemy.IsBoss) { Victory(); return; }
                 rewardCards = run.RollRewards();
                 screen = GameScreen.Reward;
-                Say("ESCOLHE UMA CARTA. ESCREVE NA FICHA.");
+                Say("PICK A CARD. WRITE IT ON YOUR SHEET.");
             });
         }
 
@@ -593,7 +686,7 @@ namespace DeckDark.View
                 {
                     Sfx("pencil");
                     run.Sheet.Deck.Add(rewardCards[i]);
-                    Then(0.4f, ReturnToMap);
+                    Then(0.5f, ReturnToMap);
                     return;
                 }
             }
@@ -626,15 +719,15 @@ namespace DeckDark.View
                     return;
                 }
                 var roll = run.Dice.Test(run.Sheet.Mod(ch.TestAttr), ch.Dc, false, false);
-                ShowRoll(roll, false, 0, "TESTE DE " + CharacterSheet.AttrName(ch.TestAttr));
-                dice.X = 400; dice.Y = 150;
-                Then(0.9f, () =>
+                ShowRoll(roll, false, 0, CharacterSheet.AttrName(ch.TestAttr) + " CHECK");
+                dice.X = 404; dice.Y = 150;
+                Then(1.5f, () =>
                 {
                     var outcome = roll.Success ? ch.Success : ch.Failure;
                     var relic = run.Apply(outcome);
-                    eventResult = (roll.Success ? "SUCESSO. " : "FALHA. ") + outcome.Text;
+                    eventResult = (roll.Success ? "SUCCESS. " : "FAILURE. ") + outcome.Text;
                     if (relic != null) eventResult += " (" + relic.Name + ")";
-                    if (outcome.Kind == OutcomeKind.AddCurse) { Sfx("curse"); lampDip = 1f; Say("AGORA ELA ESTÁ NO SEU DECK."); }
+                    if (outcome.Kind == OutcomeKind.AddCurse) { Sfx("curse"); lampDip = 1f; Say("NOW IT'S IN YOUR DECK."); }
                     else if (outcome.Kind == OutcomeKind.LoseHp) { Sfx("hit"); shake = 3f; }
                     else Sfx(roll.Success ? "heal" : "miss");
                     eventResolved = true;
@@ -657,7 +750,7 @@ namespace DeckDark.View
             ReturnToMap();
         }
 
-        // ---------------- Taverna ----------------
+        // ---------------- Lanche ----------------
 
         void ClickTavern()
         {
@@ -668,16 +761,16 @@ namespace DeckDark.View
             }
             if (Hover(ChoiceX, ChoiceY(0), ChoiceW, ChoiceH))
             {
-                int amount = (int)(run.Sheet.MaxHp * HouseRules.TavernHealFraction(run.RulesVersion));
+                int amount = (int)(run.Sheet.MaxHp * Homebrew.TavernHealFraction(run.RulesVersion));
                 int before = run.Sheet.Hp;
                 run.Sheet.Heal(amount);
-                tavernResult = "VOCÊ DESCANSA E RECUPERA " + (run.Sheet.Hp - before) + " PV. O SALGADINHO ESTÁ MURCHO, COMO SE O PACOTE ESTIVESSE ABERTO HÁ DIAS.";
+                tavernResult = "YOU REST AND RECOVER " + (run.Sheet.Hp - before) + " HP. THE CHIPS ARE STALE, LIKE THE BAG HAS BEEN OPEN FOR DAYS.";
                 Sfx("heal");
             }
             else if (Hover(ChoiceX, ChoiceY(1), ChoiceW, ChoiceH))
             {
-                run.Sheet.Scores[(int)Attr.FOR] += 2;
-                tavernResult = "VOCÊ TREINA COM A ESPADA. FOR +2. SEUS ATAQUES FICAM MAIS FORTES. SEU BRAÇO DE VERDADE ESTÁ DOLORIDO.";
+                run.Sheet.Scores[(int)Attr.STR] += 2;
+                tavernResult = "YOU TRAIN WITH THE SWORD. STR +2. YOUR ATTACKS HIT HARDER. YOUR REAL ARM IS SORE.";
                 Sfx("pencil");
             }
         }
@@ -692,12 +785,12 @@ namespace DeckDark.View
             BuildStaticScene();
             screen = GameScreen.Death;
             lampDip = 1f;
-            Then(1.4f, () =>
+            Then(1.8f, () =>
             {
-                Script(() => { screen = GameScreen.Title; run = null; combat = null; },
-                    L("SEU GUERREIRO MORREU."),
-                    L("TUDO BEM. ACONTECE COM TODO MUNDO QUE SENTA AÍ."),
-                    L("AMASSA A FICHA E JOGA NO CHÃO. A GENTE COMEÇA DE NOVO."));
+                Script(EndRunToMenu,
+                    L("YOUR WARRIOR DIED."),
+                    L("IT'S FINE. IT HAPPENS TO EVERYONE WHO SITS THERE."),
+                    L("CRUMPLE THE SHEET AND THROW IT ON THE FLOOR. WE START AGAIN."));
             });
         }
 
@@ -705,18 +798,29 @@ namespace DeckDark.View
         {
             wins++;
             host.SaveInt("wins", wins);
+            newRulesUnlocked = false;
+            if (run.RulesVersion >= unlockedRules && unlockedRules < Homebrew.MaxVersion)
+            {
+                unlockedRules++;
+                selectedRules = unlockedRules;
+                host.SaveInt("unlocked", unlockedRules);
+                host.SaveInt("selected", selectedRules);
+                newRulesUnlocked = true;
+            }
             screen = GameScreen.Victory;
             lampFlash = 1f;
             Sfx("crit");
-            int newVersion = RulesVersion;
-            Then(1.0f, () =>
+            Then(1.5f, () =>
             {
-                Script(() => { screen = GameScreen.Title; run = null; combat = null; },
+                string last = newRulesUnlocked
+                    ? "I WROTE SOME NEW RULES. HOMEBREW V" + unlockedRules + ".0."
+                    : "THERE ARE NO NEW RULES LEFT. I'LL THINK OF SOMETHING.";
+                Script(EndRunToMenu,
                     L("..."),
-                    L("VOCÊ VENCEU O REI SEM ROSTO."),
-                    L("LEGAL. MUITO LEGAL."),
-                    L("MAS A CAMPANHA NÃO ACABA AQUI. ELA NUNCA ACABA."),
-                    L("EU ESCREVI UMAS REGRAS NOVAS. REGRAS DA CASA V" + newVersion + ".0."));
+                    L("YOU BEAT THE FACELESS KING."),
+                    L("COOL. VERY COOL."),
+                    L("BUT THE CAMPAIGN DOESN'T END HERE. IT NEVER ENDS."),
+                    L(last));
             });
         }
     }

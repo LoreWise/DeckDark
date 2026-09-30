@@ -14,20 +14,20 @@ namespace DeckDark.Core
     {
         public static readonly RelicDef PetDie = new RelicDef
         {
-            Id = RelicId.PetDie, Name = "DADO DE ESTIMAÇÃO",
-            Description = "SEU PRIMEIRO ATAQUE EM CADA COMBATE TEM VANTAGEM."
+            Id = RelicId.PetDie, Name = "PET DIE",
+            Description = "YOUR FIRST ATTACK IN EVERY COMBAT HAS ADVANTAGE."
         };
 
         public static readonly RelicDef BoneAmulet = new RelicDef
         {
-            Id = RelicId.BoneAmulet, Name = "AMULETO DE OSSO",
-            Description = "+1 NA SUA CLASSE DE ARMADURA.", ArmorClassBonus = 1
+            Id = RelicId.BoneAmulet, Name = "BONE AMULET",
+            Description = "+1 TO YOUR ARMOR CLASS.", ArmorClassBonus = 1
         };
 
         public static readonly RelicDef RabbitFoot = new RelicDef
         {
-            Id = RelicId.RabbitFoot, Name = "PÉ DE COELHO",
-            Description = "CURA 4 PV AO VENCER UM COMBATE."
+            Id = RelicId.RabbitFoot, Name = "RABBIT'S FOOT",
+            Description = "HEAL 4 HP AFTER WINNING A COMBAT."
         };
 
         public static readonly RelicDef[] All = { PetDie, BoneAmulet, RabbitFoot };

@@ -2,14 +2,14 @@ using System.Collections.Generic;
 
 namespace DeckDark.Core
 {
-    public enum Attr { FOR, DES, CON, INT, SAB, CAR }
+    public enum Attr { STR, DEX, CON, INT, WIS, CHA }
 
     /// <summary>
     /// A ficha do personagem: atributos, vida, classe de armadura, deck e reliquias.
     /// </summary>
     public class CharacterSheet
     {
-        public string Name = "Guerreiro";
+        public string Name = "WARRIOR";
         public int Level = 1;
         public readonly int[] Scores = new int[6];
         public int MaxHp;
@@ -54,13 +54,13 @@ namespace DeckDark.Core
         public static CharacterSheet NewWarrior()
         {
             var c = new CharacterSheet();
-            c.Name = "Guerreiro";
-            c.Scores[(int)Attr.FOR] = 16;
-            c.Scores[(int)Attr.DES] = 12;
+            c.Name = "WARRIOR";
+            c.Scores[(int)Attr.STR] = 16;
+            c.Scores[(int)Attr.DEX] = 12;
             c.Scores[(int)Attr.CON] = 14;
             c.Scores[(int)Attr.INT] = 8;
-            c.Scores[(int)Attr.SAB] = 10;
-            c.Scores[(int)Attr.CAR] = 10;
+            c.Scores[(int)Attr.WIS] = 10;
+            c.Scores[(int)Attr.CHA] = 10;
             c.MaxHp = 30;
             c.Hp = c.MaxHp;
             c.BaseArmorClass = 14;
@@ -71,17 +71,6 @@ namespace DeckDark.Core
             return c;
         }
 
-        public static string AttrName(Attr a)
-        {
-            switch (a)
-            {
-                case Attr.FOR: return "FOR";
-                case Attr.DES: return "DES";
-                case Attr.CON: return "CON";
-                case Attr.INT: return "INT";
-                case Attr.SAB: return "SAB";
-                default: return "CAR";
-            }
-        }
+        public static string AttrName(Attr a) { return a.ToString(); }
     }
 }

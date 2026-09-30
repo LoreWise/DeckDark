@@ -42,20 +42,25 @@ namespace DeckDark.Core
     }
 
     /// <summary>
-    /// Regras da Casa: o sistema de dificuldade crescente.
-    /// Cada versao inclui as anteriores.
+    /// Homebrew: o sistema de dificuldade crescente. As regras que o Mestre inventa.
+    /// Cada versao inclui todas as anteriores. Vencer com a versao N libera a N+1.
     /// </summary>
-    public static class HouseRules
+    public static class Homebrew
     {
         public static readonly string[] Texts =
         {
-            "v1.0  AS REGRAS NORMAIS. POR ENQUANTO.",
-            "v2.0  OS MONSTROS TÊM A PELE MAIS GROSSA. (+1 CA)",
-            "v3.0  DESCANSAR NÃO CURA TUDO.",
+            "V1.0  THE NORMAL RULES. FOR NOW.",
+            "V2.0  MONSTERS HAVE THICKER SKIN. (+1 AC)",
+            "V3.0  RESTING DOESN'T HEAL EVERYTHING. (SNACK HEALS 20%)",
+            "V4.0  EVERY HERO STARTS HURT. (START AT 80% HP)",
+            "V5.0  THE MASTER CAN ROLL AGAIN. (ONCE PER COMBAT, A MISSED ENEMY ATTACK IS REROLLED)",
         };
 
+        public static int MaxVersion { get { return Texts.Length; } }
         public static int EnemyArmorBonus(int version) { return version >= 2 ? 1 : 0; }
         public static float TavernHealFraction(int version) { return version >= 3 ? 0.2f : 0.35f; }
+        public static float StartingHpFraction(int version) { return version >= 4 ? 0.8f : 1f; }
+        public static bool EnemyReroll(int version) { return version >= 5; }
     }
 
     /// <summary>Estado de uma run: ficha, mapa, posicao atual.</summary>
@@ -73,6 +78,7 @@ namespace DeckDark.Core
             Dice = new Dice(seed);
             Sheet = CharacterSheet.NewWarrior();
             RulesVersion = rulesVersion;
+            Sheet.Hp = (int)(Sheet.MaxHp * Homebrew.StartingHpFraction(rulesVersion));
             BuildMap();
             Current = Layers[0][0];
             Current.Visited = true;
@@ -186,7 +192,7 @@ namespace DeckDark.Core
                 case OutcomeKind.Heal: Sheet.Heal(o.Amount); break;
                 case OutcomeKind.AddCard: Sheet.Deck.Add(o.Card); break;
                 case OutcomeKind.AddCurse: Sheet.Deck.Add(CardLibrary.Nightmare); break;
-                case OutcomeKind.GainStrength: Sheet.Scores[(int)Attr.FOR] += o.Amount; break;
+                case OutcomeKind.GainStrength: Sheet.Scores[(int)Attr.STR] += o.Amount; break;
                 case OutcomeKind.AddRandomRelic:
                 {
                     var r = RollRelic();
@@ -203,26 +209,26 @@ namespace DeckDark.Core
         public static readonly EventDef MossChest = new EventDef
         {
             Id = "chest",
-            Title = "O BAÚ COBERTO DE MUSGO",
-            Body = "NO MEIO DO CORREDOR HÁ UM BAÚ VELHO. A FECHADURA ESTÁ ENFERRUJADA E ALGO LÁ DENTRO FAZ UM BARULHO BAIXINHO, COMO SE RESPIRASSE.",
+            Title = "THE MOSSY CHEST",
+            Body = "AN OLD CHEST SITS IN THE MIDDLE OF THE HALL. THE LOCK IS RUSTED AND SOMETHING INSIDE MAKES A LOW SOUND, LIKE BREATHING.",
             Choices = new[]
             {
                 new EventChoice
                 {
-                    Label = "ABRIR COM CUIDADO", HasTest = true, TestAttr = Attr.DES, Dc = 12,
-                    Success = new EventOutcome { Text = "UMA POÇÃO INTACTA, ENROLADA EM PANO. VOCÊ GUARDA NA MOCHILA.", Kind = OutcomeKind.AddCard, Card = CardLibrary.HealingPotion },
-                    Failure = new EventOutcome { Text = "UMA AGULHA ESCONDIDA NA FECHADURA. SEU DEDO FICA ROXO.", Kind = OutcomeKind.LoseHp, Amount = 5 },
+                    Label = "OPEN IT CAREFULLY", HasTest = true, TestAttr = Attr.DEX, Dc = 12,
+                    Success = new EventOutcome { Text = "AN INTACT POTION, WRAPPED IN CLOTH. YOU PUT IT IN YOUR BAG.", Kind = OutcomeKind.AddCard, Card = CardLibrary.HealingPotion },
+                    Failure = new EventOutcome { Text = "A HIDDEN NEEDLE IN THE LOCK. YOUR FINGER TURNS PURPLE.", Kind = OutcomeKind.LoseHp, Amount = 5 },
                 },
                 new EventChoice
                 {
-                    Label = "ARROMBAR", HasTest = true, TestAttr = Attr.FOR, Dc = 13,
-                    Success = new EventOutcome { Text = "A TAMPA CEDE. LÁ DENTRO, ALGO QUE BRILHA.", Kind = OutcomeKind.AddRandomRelic },
-                    Failure = new EventOutcome { Text = "A TAMPA FECHA NO SEU BRAÇO COMO UMA BOCA.", Kind = OutcomeKind.LoseHp, Amount = 7 },
+                    Label = "FORCE IT OPEN", HasTest = true, TestAttr = Attr.STR, Dc = 13,
+                    Success = new EventOutcome { Text = "THE LID GIVES WAY. INSIDE, SOMETHING SHINES.", Kind = OutcomeKind.AddRandomRelic },
+                    Failure = new EventOutcome { Text = "THE LID SNAPS SHUT ON YOUR ARM LIKE A MOUTH.", Kind = OutcomeKind.LoseHp, Amount = 7 },
                 },
                 new EventChoice
                 {
-                    Label = "DEIXAR PRA LÁ",
-                    Success = new EventOutcome { Text = "VOCÊ SEGUE EM FRENTE. O BARULHO PARA QUANDO VOCÊ VIRA AS COSTAS.", Kind = OutcomeKind.None },
+                    Label = "LEAVE IT",
+                    Success = new EventOutcome { Text = "YOU MOVE ON. THE SOUND STOPS WHEN YOU TURN YOUR BACK.", Kind = OutcomeKind.None },
                 },
             }
         };
@@ -230,26 +236,26 @@ namespace DeckDark.Core
         public static readonly EventDef Mirror = new EventDef
         {
             Id = "mirror",
-            Title = "O ESPELHO",
-            Body = "UMA SALA VAZIA COM UM ESPELHO. O REFLEXO NÃO MOSTRA SEU GUERREIRO. MOSTRA UMA CRIANÇA SENTADA NUM PORÃO, OLHANDO PARA BAIXO.",
+            Title = "THE MIRROR",
+            Body = "AN EMPTY ROOM WITH A MIRROR. THE REFLECTION DOESN'T SHOW YOUR WARRIOR. IT SHOWS A KID SITTING IN A BASEMENT, LOOKING DOWN.",
             Choices = new[]
             {
                 new EventChoice
                 {
-                    Label = "OLHAR MAIS DE PERTO", HasTest = true, TestAttr = Attr.SAB, Dc = 13,
-                    Success = new EventOutcome { Text = "VOCÊ ENTENDE ALGO QUE NÃO DEVIA. É DIFÍCIL ESQUECER.", Kind = OutcomeKind.AddCard, Card = CardLibrary.Lucidity },
-                    Failure = new EventOutcome { Text = "A CRIANÇA NO ESPELHO LEVANTA A CABEÇA. ELA ESTÁ USANDO UMA MÁSCARA.", Kind = OutcomeKind.AddCurse },
+                    Label = "LOOK CLOSER", HasTest = true, TestAttr = Attr.WIS, Dc = 13,
+                    Success = new EventOutcome { Text = "YOU UNDERSTAND SOMETHING YOU SHOULDN'T. IT'S HARD TO FORGET.", Kind = OutcomeKind.AddCard, Card = CardLibrary.Lucidity },
+                    Failure = new EventOutcome { Text = "THE KID IN THE MIRROR LOOKS UP. HE IS WEARING A MASK.", Kind = OutcomeKind.AddCurse },
                 },
                 new EventChoice
                 {
-                    Label = "QUEBRAR O ESPELHO", HasTest = true, TestAttr = Attr.FOR, Dc = 10,
-                    Success = new EventOutcome { Text = "OS CACOS PARAM DE SUSSURRAR. VOCÊ SE SENTE MAIS FORTE.", Kind = OutcomeKind.GainStrength, Amount = 2 },
-                    Failure = new EventOutcome { Text = "O VIDRO CORTA FUNDO. PARECE QUE O CORTE ESTÁ NA SUA MÃO DE VERDADE.", Kind = OutcomeKind.LoseHp, Amount = 4 },
+                    Label = "BREAK THE MIRROR", HasTest = true, TestAttr = Attr.STR, Dc = 10,
+                    Success = new EventOutcome { Text = "THE SHARDS STOP WHISPERING. YOU FEEL STRONGER.", Kind = OutcomeKind.GainStrength, Amount = 2 },
+                    Failure = new EventOutcome { Text = "THE GLASS CUTS DEEP. IT FEELS LIKE THE CUT IS ON YOUR REAL HAND.", Kind = OutcomeKind.LoseHp, Amount = 4 },
                 },
                 new EventChoice
                 {
-                    Label = "SAIR DA SALA",
-                    Success = new EventOutcome { Text = "VOCÊ FECHA A PORTA. DO OUTRO LADO, ALGUÉM BATE DUAS VEZES.", Kind = OutcomeKind.None },
+                    Label = "LEAVE THE ROOM",
+                    Success = new EventOutcome { Text = "YOU CLOSE THE DOOR. ON THE OTHER SIDE, SOMEONE KNOCKS TWICE.", Kind = OutcomeKind.None },
                 },
             }
         };
