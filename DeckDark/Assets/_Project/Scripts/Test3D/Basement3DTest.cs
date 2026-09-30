@@ -14,7 +14,7 @@ namespace DeckDark.Test3D
     /// no shader DarkDeck/PixelLit, entao funciona em qualquer pipeline.
     /// Abre com F3 durante o jogo ou pelo menu Dark Deck > Play 3D Test.
     /// </summary>
-    public class Basement3DTest : MonoBehaviour
+    public partial class Basement3DTest : MonoBehaviour
     {
         const int W = 480, H = 270;
 
@@ -71,6 +71,7 @@ namespace DeckDark.Test3D
             d20 = BuildIcosahedron();
 
             BuildScene();
+            BuildStory();
         }
 
         void OnDestroy()
@@ -435,6 +436,7 @@ namespace DeckDark.Test3D
             lampAngleZ = Mathf.Sin(t * 0.53f + 1.3f) * 2.5f;
             lampPos = lampPivot + LampRot() * (Vector3.down * cordLen);
 
+            UpdateStory();
             RenderScene();
         }
 

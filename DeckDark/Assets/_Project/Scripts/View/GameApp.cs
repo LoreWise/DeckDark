@@ -21,7 +21,7 @@ namespace DeckDark.View
         public bool Escape;
     }
 
-    public enum GameScreen { Menu, NewGame, Options, Intro, Map, Combat, Reward, Event, Treasure, Tavern, Death, Victory }
+    public enum GameScreen { Menu, NewGame, Options, Intro, Map, Combat, Reward, Event, Treasure, Tavern, Death, Victory, Notes }
 
     public enum GameSpeed { Slow, Normal, Fast }
 
@@ -130,6 +130,7 @@ namespace DeckDark.View
             selectedClass = (PlayerClass)Math.Max(0, Math.Min(1, host.LoadInt("class", 0)));
             speed = (GameSpeed)Math.Max(0, Math.Min(2, host.LoadInt("speed", (int)GameSpeed.Normal)));
             maskOn = sessions > 0;
+            LoadStory();
         }
 
         /// <summary>Multiplicador de todas as animacoes. Escolhido em Options.</summary>
@@ -187,6 +188,7 @@ namespace DeckDark.View
                 UpdateBeats(adt);
                 UpdateSpeech(adt);
                 UpdateFx(dt, adt);
+                StoryUpdate(dt);
             }
 
             if (input.Click) HandleClick();
@@ -346,6 +348,7 @@ namespace DeckDark.View
                 case GameScreen.Menu: ClickMenu(); return;
                 case GameScreen.NewGame: ClickNewGame(); return;
                 case GameScreen.Options: ClickOptions(); return;
+                case GameScreen.Notes: ClickNotes(); return;
             }
 
             if (InRun && Hover(MenuTagX, MenuTagY, MenuTagW, MenuTagH)) { OpenPause(); return; }
@@ -429,6 +432,7 @@ namespace DeckDark.View
             paused = false;
             screen = GameScreen.Menu;
             BuildStaticScene();
+            StoryAfterRun();
         }
 
         // ---------------- Mapa ----------------

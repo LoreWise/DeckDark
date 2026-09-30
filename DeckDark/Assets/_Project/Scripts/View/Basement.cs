@@ -79,6 +79,7 @@ namespace DeckDark.View
             DrawPosters(c);
             DrawWindow(c);
             DrawShelf(c);
+            DrawStoryProps(c);
 
             // relogio (so o fundo; os ponteiros mudam)
             c.FillCircle(186, 22, 10, Rgb.Hex(0x1e1a1a));
@@ -237,6 +238,7 @@ namespace DeckDark.View
         {
             // Comeca as 5 da tarde e avanca com cada sessao e cada sala. A noite nao acaba.
             float hours = 17f + sessions * 0.6f + (run != null ? run.Current.Layer * 0.35f : 0f);
+            if (StoryClockStopped) hours = 15f + 17f / 60f; // parou as 3:17
             double ha = (hours % 12) / 12.0 * Math.PI * 2;
             double ma = (hours % 1) * Math.PI * 2;
             c.Line(186, 22, 186 + (int)Math.Round(Math.Sin(ha) * 4), 22 - (int)Math.Round(Math.Cos(ha) * 4), Palette.Ink);

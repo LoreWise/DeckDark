@@ -140,10 +140,12 @@ namespace DeckDark.View
             game.Update(Time.unscaledDeltaTime, input);
             if (use3D && table3D != null)
             {
-                table3D.LampLevel = game.Lamp;
+                table3D.LampLevel = game.Lamp * game.StoryLampFactor;
                 table3D.DreadLevel = game.DreadLevel;
                 table3D.MaskOn = game.MaskOn;
                 table3D.ShakeAmount = game.Shake;
+                table3D.StoryStage = game.StoryStage;
+                table3D.StoryWizard = game.StoryWizard;
                 table3D.SetCombat(game.Minis, game.ShowMat3D, game.MatLeft, game.MatTop, game.MatWidth, game.MatHeight);
             }
             UploadCanvas();
@@ -227,6 +229,7 @@ namespace DeckDark.View
         {
             foreach (var k in new[] { "deaths", "wins", "sessions", "unlocked", "selected" })
                 PlayerPrefs.DeleteKey("deckdark_" + k);
+            foreach (var k in GameApp.StoryKeys) PlayerPrefs.DeleteKey("deckdark_" + k);
             PlayerPrefs.Save();
             game = new GameApp(this);
             Debug.Log("DeckDark: progresso zerado.");

@@ -492,6 +492,7 @@ namespace DeckDark.View
                     Wobble = v.Hurt > 0 ? (int)(Math.Sin(time * 60) * 2 * v.Hurt) : 0,
                 });
             }
+            StoryMinis();
         }
 
         void DrawCombatTable(PixelCanvas c)

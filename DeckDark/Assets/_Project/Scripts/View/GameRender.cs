@@ -88,7 +88,9 @@ namespace DeckDark.View
                 case GameScreen.Tavern: DrawTavern(c); break;
                 case GameScreen.Death: DrawDeath(c); break;
                 case GameScreen.Victory: DrawVictory(c); break;
+                case GameScreen.Notes: DrawMenu(c, false); DrawNotes(c); break;
             }
+            DrawStoryOverlay(c);
 
             c.ResetTint();
             DrawDice(c);
@@ -391,6 +393,7 @@ namespace DeckDark.View
 
             // descricao
             PixelFont.Small.DrawWrapped(c, card.Description(run.Sheet), x + 3, y + 48, CardW - 6, ink, true);
+            StoryCardOverlay(c, card, x, y);
             c.ResetTint();
         }
 

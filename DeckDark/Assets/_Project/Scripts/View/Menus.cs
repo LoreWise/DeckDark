@@ -31,6 +31,7 @@ namespace DeckDark.View
                 return;
             }
             if (screen == GameScreen.NewGame) { screen = GameScreen.Menu; Sfx("click", 0.5f); return; }
+            if (screen == GameScreen.Notes) { CloseNotes(); return; }
             if (screen == GameScreen.Menu) return;
             if (paused) { paused = false; Sfx("click", 0.5f); }
             else OpenPause();
@@ -62,6 +63,7 @@ namespace DeckDark.View
 
         void ClickMenu()
         {
+            if (ClickNotesButton()) return;
             if (Hover(MenuBtnX, MenuBtnY(0), MenuBtnW, MenuBtnH)) { Sfx("click"); screen = GameScreen.NewGame; }
             else if (Hover(MenuBtnX, MenuBtnY(1), MenuBtnW, MenuBtnH)) OpenOptions(false);
             else if (Hover(MenuBtnX, MenuBtnY(2), MenuBtnW, MenuBtnH)) { Sfx("click"); host.Quit(); }
@@ -79,6 +81,7 @@ namespace DeckDark.View
             if (!buttons) return;
             string[] labels = { "NEW GAME", "OPTIONS", "QUIT" };
             for (int i = 0; i < labels.Length; i++) DrawButton(c, MenuBtnX, MenuBtnY(i), MenuBtnW, MenuBtnH, labels[i]);
+            DrawNotesButton(c);
 
             string stats = "SESSIONS " + sessions + "   DEATHS " + deaths + "   WINS " + wins;
             PixelFont.Small.DrawCentered(c, stats, 240, 258, Palette.Pencil);
@@ -197,6 +200,7 @@ namespace DeckDark.View
         void ResetProgress()
         {
             foreach (var k in new[] { "deaths", "wins", "sessions", "unlocked", "selected" }) host.DeleteKey(k);
+            ResetStory();
             LoadProgress();
             resetArmed = false;
             BuildStaticScene();
