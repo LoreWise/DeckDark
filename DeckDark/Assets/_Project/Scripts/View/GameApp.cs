@@ -92,13 +92,10 @@ namespace DeckDark.View
         readonly List<Floater> floaters = new List<Floater>();
 
         float shake;
-        float enemyHurt, playerHurt, enemyFade;
-        int shownEnemyHp, shownPlayerHp, shownBlock, shownEnemyBlock;
         float lampDip;
         float lampFlash;
 
         // Telas de escolha
-        CardDef[] rewardCards;
         RelicDef treasureRelic;
         EventDef currentEvent;
         string eventResult;
@@ -153,7 +150,7 @@ namespace DeckDark.View
             get
             {
                 float d = 0.08f * Math.Min(deaths, 5);
-                if (InRun) d += 0.12f * run.Current.Layer;
+                if (InRun) d += 0.5f * run.Current.Layer / run.LastLayer;
                 if (combat != null && combat.HiddenRolls && screen == GameScreen.Combat) d += 0.2f;
                 if (screen == GameScreen.Death) d += 0.15f;
                 return Math.Min(1f, d);
@@ -303,8 +300,12 @@ namespace DeckDark.View
                 if (floaters[i].T > 1.8f) floaters.RemoveAt(i);
             }
             shake = Math.Max(0, shake - dt * 12f);
-            enemyHurt = Math.Max(0, enemyHurt - adt * 2.5f);
             playerHurt = Math.Max(0, playerHurt - adt * 2.5f);
+            foreach (var v in enemyViews)
+            {
+                v.Hurt = Math.Max(0, v.Hurt - adt * 2.5f);
+                if (v.Dead || v.Fled) v.Fade = Math.Min(1f, v.Fade + adt * 0.45f);
+            }
             lampFlash = Math.Max(0, lampFlash - dt * 2f);
 
             // Piscadas da lampada: mais frequentes conforme o clima piora
@@ -435,15 +436,16 @@ namespace DeckDark.View
             switch (node.Type)
             {
                 case NodeType.Combat:
+                case NodeType.Elite:
                 case NodeType.Boss:
-                    StartCombat(run.EnemyForCurrent());
+                    StartCombat(run.EncounterForCurrent(), node.Type);
                     break;
                 case NodeType.Event:
                     currentEvent = run.NextEvent();
                     eventResult = null;
                     eventResolved = false;
                     screen = GameScreen.Event;
-                    if (currentEvent.Id == "mirror") Say("I DIDN'T WRITE THAT ONE.");
+                    if (currentEvent.MasterLine != null) Say(currentEvent.MasterLine);
                     break;
                 case NodeType.Treasure:
                     treasureRelic = run.RollRelic();
@@ -461,99 +463,14 @@ namespace DeckDark.View
         void ReturnToMap()
         {
             screen = GameScreen.Map;
+            dice = null;
             combat = null;
             int layer = run.Current.Layer;
             if (layer == 1) Say("IT'S GETTING LATE, HUH?");
-            else if (layer == 2) Say("NOBODY'S COMING DOWN HERE. DON'T WORRY.");
-            else if (layer == 3) Say("HE'S WAITING FOR YOU.");
-        }
-
-        // ---------------- Combate ----------------
-
-        void StartCombat(EnemyDef enemy)
-        {
-            combat = new Combat(run.Sheet, enemy, run.Dice, Homebrew.EnemyArmorBonus(run.RulesVersion));
-            combat.EnemyCanReroll = Homebrew.EnemyReroll(run.RulesVersion);
-            screen = GameScreen.Combat;
-            enemyFade = 0;
-            shownEnemyHp = combat.EnemyHp;
-            shownEnemyBlock = 0;
-            shownPlayerHp = run.Sheet.Hp;
-            combat.StartPlayerTurn();
-            shownBlock = 0;
-            Sfx("card", 0.6f);
-            if (enemy.IsBoss) Say("THE FACELESS KING. HE HAS NO FACE BECAUSE HE GAVE IT TO ME.");
-            else Say("A " + enemy.Name + " APPEARS. ROLL FOR INITIATIVE... JUST KIDDING. YOU GO FIRST.");
-        }
-
-        void ClickCombat()
-        {
-            if (combat == null || combat.Over) return;
-
-            if (Hover(EndTurnX, EndTurnY, EndTurnW, EndTurnH))
-            {
-                EndTurn();
-                return;
-            }
-
-            int idx = HoveredCard();
-            if (idx < 0) return;
-            var card = combat.Hand[idx];
-            if (card.Unplayable)
-            {
-                Sfx("curse", 0.4f);
-                Say("YOU CAN'T USE THAT. YOU NEVER CAN.");
-                shake = 1.5f;
-                return;
-            }
-            if (!combat.CanPlay(card))
-            {
-                Sfx("miss", 0.5f);
-                Float(CardCenterX(idx), 180, "NO ENERGY", Palette.Red);
-                return;
-            }
-            PlayCard(idx);
-        }
-
-        void PlayCard(int idx)
-        {
-            Sfx("card");
-            var res = combat.Play(idx);
-            if (res == null) return;
-
-            foreach (var ar in res.Attacks)
-            {
-                var a = ar;
-                Then(0.05f, () => ShowRoll(a.Roll, false, 0, "YOUR ATTACK"));
-                Then(1.35f, () => ResolvePlayerAttack(a));
-                Then(0.7f, () => { });
-            }
-            if (res.BlockGained > 0)
-            {
-                Then(0.1f, () =>
-                {
-                    Sfx("block");
-                    shownBlock = combat.Block;
-                    Float(PlayerMiniX, 142, "+" + res.BlockGained + " BLOCK", Palette.Blue);
-                });
-            }
-            if (res.Card.ArmorThisTurn > 0)
-            {
-                Then(0.1f, () => Float(PlayerMiniX, 132, "+" + res.Card.ArmorThisTurn + " AC", Palette.Blue));
-            }
-            if (res.Healed > 0)
-            {
-                Then(0.1f, () =>
-                {
-                    Sfx("heal");
-                    shownPlayerHp = run.Sheet.Hp;
-                    Float(PlayerMiniX, 142, "+" + res.Healed + " HP", Palette.Green);
-                });
-            }
-            if (res.Card.GrantAdvantage) Then(0.1f, () => Float(PlayerMiniX, 142, "ADVANTAGE!", Palette.Gold));
-            if (res.Card.WeakenEnemy > 0) Then(0.1f, () => Float(EnemyMiniX, 132, "-" + res.Card.WeakenEnemy + " TO HIT", Palette.Gold));
-            if (res.Drawn > 0) Then(0.1f, () => Sfx("card", 0.5f));
-            Then(0.3f, CheckCombatEnd);
+            else if (layer == 2) Say("YOUR MOM CALLED. I TOLD HER YOU LEFT.");
+            else if (layer == 3) Say("NOBODY'S COMING DOWN HERE. DON'T WORRY.");
+            else if (layer == 4) Say("THE LIGHT IS FINE. IT'S ALWAYS BEEN LIKE THIS.");
+            else if (layer == 5) Say("HE'S WAITING FOR YOU.");
         }
 
         void ShowRoll(TestRoll roll, bool hidden, int announced, string label)
@@ -566,121 +483,11 @@ namespace DeckDark.View
             Sfx("dice");
         }
 
-        void ResolvePlayerAttack(AttackResult a)
-        {
-            if (a.Roll.Success)
-            {
-                if (a.Roll.IsCrit) { Sfx("crit"); Say("HM. LUCKY."); Float(EnemyMiniX, 128, "CRITICAL!", Palette.Gold); }
-                Sfx("hit");
-                shake = a.Roll.IsCrit ? 4f : 2f;
-                enemyHurt = 1f;
-                shownEnemyHp = Math.Max(0, shownEnemyHp - a.Damage);
-                shownEnemyBlock = combat.EnemyBlock;
-                if (a.Damage > 0) Float(EnemyMiniX, 138, "-" + a.Damage, Palette.Red);
-                if (a.Blocked > 0) Float(EnemyMiniX + 14, 148, "(" + a.Blocked + " BLOCKED)", Palette.Blue);
-            }
-            else
-            {
-                Sfx("miss");
-                if (a.Roll.IsFumble) { Say("HEHE. A ONE."); Float(EnemyMiniX, 138, "CRITICAL FAIL", Palette.Red); }
-                else Float(EnemyMiniX, 138, "MISS", Palette.Paper);
-            }
-        }
-
-        void EndTurn()
-        {
-            Sfx("click");
-            combat.DiscardHand();
-            bool hiddenNow = combat.HiddenRolls;
-            // A jogada do inimigo e decidida agora; a tela mostra o resultado aos poucos.
-            var r = combat.EnemyAct();
-            bool attack = r.Move.Kind == MoveKind.Attack;
-
-            Then(0.5f, () => { });
-            if (attack && hiddenNow) Then(0.05f, () => Say("I'LL ROLL BACK HERE NOW, OK?"));
-
-            if (attack && r.Rerolled)
-            {
-                Then(0.5f, () => ShowRoll(r.FirstRoll, r.Hidden, r.FirstRoll.Total, r.Move.Name));
-                Then(r.Hidden ? 2.0f : 1.6f, () =>
-                {
-                    Say("NO. I'M ROLLING THAT AGAIN. HOMEBREW RULES.");
-                    Float(PlayerMiniX, 128, "REROLL!", Palette.Red);
-                    ShowRoll(r.Roll, r.Hidden, r.AnnouncedTotal, r.Move.Name + " (AGAIN)");
-                });
-            }
-            else
-            {
-                Then(0.5f, () =>
-                {
-                    switch (r.Move.Kind)
-                    {
-                        case MoveKind.Attack:
-                            ShowRoll(r.Roll, r.Hidden, r.AnnouncedTotal, r.Move.Name);
-                            break;
-                        case MoveKind.Guard:
-                            Sfx("block");
-                            shownEnemyBlock = combat.EnemyBlock;
-                            Float(EnemyMiniX, 138, "+" + r.GuardGained + " BLOCK", Palette.Blue);
-                            break;
-                        case MoveKind.Curse:
-                            Sfx("curse");
-                            lampDip = 0.9f;
-                            Float(PlayerMiniX, 132, "+NIGHTMARE IN DISCARD", Palette.Purple);
-                            break;
-                    }
-                });
-            }
-
-            Then(attack ? (r.Hidden ? 2.0f : 1.5f) : 0.9f, () =>
-            {
-                if (!attack) return;
-                if (r.Hidden) Say(r.Cheated ? "IT'S A " + r.AnnouncedTotal + ". HIT. I SAW IT." : "IT'S A " + r.AnnouncedTotal + ".");
-                if (r.Hit)
-                {
-                    if (r.Roll.IsCrit) { Sfx("crit"); Float(PlayerMiniX, 128, "CRITICAL!", Palette.Red); }
-                    Sfx("hit");
-                    shake = r.Roll.IsCrit ? 5f : 3f;
-                    playerHurt = 1f;
-                    shownPlayerHp = run.Sheet.Hp;
-                    shownBlock = combat.Block;
-                    if (r.Damage > 0) Float(PlayerMiniX, 138, "-" + r.Damage, Palette.Red);
-                    if (r.Blocked > 0) Float(PlayerMiniX + 14, 148, "(" + r.Blocked + " BLOCKED)", Palette.Blue);
-                }
-                else
-                {
-                    Sfx("miss");
-                    Float(PlayerMiniX, 138, "MISS", Palette.Paper);
-                }
-            });
-            Then(0.9f, () =>
-            {
-                if (combat.PlayerDead) { PlayerDied(); return; }
-                combat.StartPlayerTurn();
-                shownBlock = 0;
-                Sfx("card", 0.5f);
-            });
-        }
-
-        void CheckCombatEnd()
-        {
-            if (!combat.EnemyDead) return;
-            Then(0.5f, () => { enemyFade = 0.01f; Sfx("death", 0.35f); });
-            Then(1.4f, () =>
-            {
-                if (run.Sheet.HasRelic(RelicId.RabbitFoot)) run.Sheet.Heal(4);
-                if (combat.Enemy.IsBoss) { Victory(); return; }
-                rewardCards = run.RollRewards();
-                screen = GameScreen.Reward;
-                Say("PICK A CARD. WRITE IT ON YOUR SHEET.");
-            });
-        }
-
         // ---------------- Recompensa ----------------
 
         void ClickReward()
         {
-            for (int i = 0; i < 3; i++)
+            for (int i = 0; i < rewardCards.Length; i++)
             {
                 if (Hover(RewardCardX(i), RewardY, CardW, CardH))
                 {
@@ -713,8 +520,9 @@ namespace DeckDark.View
                 Sfx("click");
                 if (!ch.HasTest)
                 {
-                    eventResult = ch.Success.Text;
-                    run.Apply(ch.Success);
+                    string g = run.Apply(ch.Success);
+                    eventResult = ch.Success.Text + (g != null ? " (" + g + ")" : "");
+                    Sfx(ch.Success.Kind == OutcomeKind.None ? "click" : "heal", 0.6f);
                     eventResolved = true;
                     return;
                 }
@@ -724,9 +532,9 @@ namespace DeckDark.View
                 Then(1.5f, () =>
                 {
                     var outcome = roll.Success ? ch.Success : ch.Failure;
-                    var relic = run.Apply(outcome);
+                    string gains = run.Apply(outcome);
                     eventResult = (roll.Success ? "SUCCESS. " : "FAILURE. ") + outcome.Text;
-                    if (relic != null) eventResult += " (" + relic.Name + ")";
+                    if (gains != null) eventResult += " (" + gains + ")";
                     if (outcome.Kind == OutcomeKind.AddCurse) { Sfx("curse"); lampDip = 1f; Say("NOW IT'S IN YOUR DECK."); }
                     else if (outcome.Kind == OutcomeKind.LoseHp) { Sfx("hit"); shake = 3f; }
                     else Sfx(roll.Success ? "heal" : "miss");

@@ -24,6 +24,7 @@ namespace DeckDark.View
 
         void HandleEscape()
         {
+            if (selectedCard >= 0 && !paused) { CancelTargeting(); return; }
             if (screen == GameScreen.Options || (paused && optionsFromPause))
             {
                 CloseOptions();

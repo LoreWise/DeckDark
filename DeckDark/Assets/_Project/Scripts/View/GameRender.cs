@@ -8,12 +8,7 @@ namespace DeckDark.View
     public partial class GameApp
     {
         // ---------------- Layout ----------------
-        const int CardW = 62, CardH = 80;
-        const int HandY = 190, HandHoverY = 172;
-        const int HandLeft = 134, HandRight = 380;
-        const int EndTurnX = 392, EndTurnY = 104, EndTurnW = 82, EndTurnH = 22;
-        const int PlayerMiniX = 178, EnemyMiniX = 336, MiniFeetY = 176;
-        const int RewardY = 146;
+        const int RewardY = 150;
         const int SkipX = 224, SkipY = 240, SkipW = 62, SkipH = 16;
         const int ChoiceX = 142, ChoiceW = 236, ChoiceH = 17;
         const int ContinueX = 292, ContinueY = 246, ContinueW = 84, ContinueH = 16;
@@ -22,31 +17,7 @@ namespace DeckDark.View
         static int ChoiceY(int i) { return 194 + i * 21; }
         static int RewardCardX(int i) { return 255 - CardW / 2 + (i - 1) * 74; }
 
-        int CardX(int i, int n)
-        {
-            if (n <= 1) return (HandLeft + HandRight) / 2 - CardW / 2;
-            int span = HandRight - HandLeft - CardW;
-            int step = Math.Min(CardW + 4, span / (n - 1));
-            int total = step * (n - 1) + CardW;
-            int start = (HandLeft + HandRight) / 2 - total / 2;
-            return start + i * step;
-        }
-
-        int CardCenterX(int i) { return CardX(i, combat.Hand.Count) + CardW / 2; }
-
-        int HoveredCard()
-        {
-            if (combat == null) return -1;
-            int n = combat.Hand.Count;
-            for (int i = n - 1; i >= 0; i--)
-            {
-                int x = CardX(i, n);
-                if (input.X >= x && input.X < x + CardW && input.Y >= HandHoverY && input.Y < H) return i;
-            }
-            return -1;
-        }
-
-        static int NodeX(int layer) { return 158 + layer * 50; }
+        static int NodeX(int layer) { return 152 + layer * 36; }
         static int NodeY(int layer, int index, int count) { return 200 + (int)((index - (count - 1) / 2f) * 38); }
 
         MapNode HoveredNode()
@@ -299,6 +270,7 @@ namespace DeckDark.View
                 case NodeType.Event: return "EVENT";
                 case NodeType.Treasure: return "TREASURE";
                 case NodeType.Tavern: return "SNACK";
+                case NodeType.Elite: return "ELITE";
                 default: return "BOSS";
             }
         }
@@ -314,6 +286,7 @@ namespace DeckDark.View
                 case NodeType.Event: icon = Sprites.IconQuestion; main = Rgb.Hex(0x3a5a9a); break;
                 case NodeType.Treasure: icon = Sprites.IconChest; main = Rgb.Hex(0xc09030); break;
                 case NodeType.Tavern: icon = Sprites.IconMug; main = Rgb.Hex(0xc08030); break;
+                case NodeType.Elite: icon = Sprites.IconSkull; main = Rgb.Hex(0xa02020); break;
                 default: icon = Sprites.IconCrown; main = Palette.DarkRed; break;
             }
             if (faded) main = Palette.Pencil;
@@ -325,10 +298,10 @@ namespace DeckDark.View
         {
             TintAt(430, 150, 0.6f);
             int x = 392, y = 132;
-            c.Fill(x, y, 82, 70, Rgb.Hex(0xe0d8c0));
-            c.Rect(x, y, 82, 70, Palette.PaperDark);
+            c.Fill(x, y, 82, 81, Rgb.Hex(0xe0d8c0));
+            c.Rect(x, y, 82, 81, Palette.PaperDark);
             PixelFont.Small.Draw(c, "LEGEND", x + 4, y + 3, Palette.Pencil);
-            var types = new[] { NodeType.Combat, NodeType.Event, NodeType.Treasure, NodeType.Tavern, NodeType.Boss };
+            var types = new[] { NodeType.Combat, NodeType.Elite, NodeType.Event, NodeType.Treasure, NodeType.Tavern, NodeType.Boss };
             for (int i = 0; i < types.Length; i++)
             {
                 DrawNodeIcon(c, types[i], x + 4, y + 12 + i * 11, false);
@@ -337,232 +310,7 @@ namespace DeckDark.View
             c.ResetTint();
         }
 
-        // ---------------- Combate ----------------
-
-        /// <summary>A parte "fisica" do combate: papel quadriculado e as miniaturas.</summary>
-        void DrawCombatTable(PixelCanvas c)
-        {
-            int x = 134, y = 128, w = 246, h = 66;
-            c.Fill(x, y, w, h, Rgb.Hex(0xd8d2bc));
-            for (int gx = x; gx < x + w; gx += 10) c.VLine(gx, y, y + h - 1, Rgb.Hex(0xb4c4c8));
-            for (int gy = y; gy < y + h; gy += 10) c.HLine(x, x + w - 1, gy, Rgb.Hex(0xb4c4c8));
-            c.Rect(x, y, w, h, Rgb.Hex(0x9a927a));
-
-            // jogador
-            int pj = playerHurt > 0 ? (int)(Math.Sin(time * 60) * 2 * playerHurt) : 0;
-            c.FillEllipse(PlayerMiniX, MiniFeetY + 1, 15, 4, Rgb.Hex(0x7a7260));
-            c.Sprite(Sprites.Knight, PlayerMiniX - 16 + pj, MiniFeetY - Sprites.Knight.Length * 2 + 2, KnightPal, false, 2);
-
-            // inimigo
-            if (enemyFade < 1f)
-            {
-                var e = combat.Enemy;
-                string[] spr = EnemySpriteRows(e.Sprite);
-                int sw = spr[0].Length;
-                int ej = enemyHurt > 0 ? (int)(Math.Sin(time * 60) * 2 * enemyHurt) : 0;
-                c.FillEllipse(EnemyMiniX, MiniFeetY + 1, sw, 4, Rgb.Hex(0x7a7260));
-                if (enemyFade > 0)
-                {
-                    // miniatura derrubada
-                    for (int j = 0; j < spr.Length; j++)
-                        for (int i = 0; i < sw; i++)
-                        {
-                            char ch = spr[j][i];
-                            if (ch == '.') continue;
-                            var col = EnemyPal(e.Sprite, ch);
-                            if (col.HasValue) c.Fill(EnemyMiniX - spr.Length + (spr.Length - j) * 2, MiniFeetY - sw + i * 2 - 2, 2, 2, col.Value.Mul(0.7f));
-                        }
-                }
-                else
-                {
-                    var hurtFlash = enemyHurt > 0.6f;
-                    c.Sprite(spr, EnemyMiniX - sw + ej, MiniFeetY - spr.Length * 2 + 2, ch => hurtFlash ? (Rgb?)Palette.White : EnemyPal(e.Sprite, ch), true, 2);
-                }
-            }
-        }
-
-        static string[] EnemySpriteRows(EnemySprite s)
-        {
-            switch (s)
-            {
-                case EnemySprite.Goblin: return Sprites.Goblin;
-                case EnemySprite.Skeleton: return Sprites.Skeleton;
-                case EnemySprite.Cultist: return Sprites.Cultist;
-                default: return Sprites.Boss;
-            }
-        }
-
-        static Rgb? KnightPal(char ch)
-        {
-            switch (ch)
-            {
-                case 'k': return Rgb.Hex(0x1a1418);
-                case 's': return Rgb.Hex(0xa8b0b8);
-                case 'd': return Rgb.Hex(0x303840);
-                case 'r': return Rgb.Hex(0xa83030);
-                case 'y': return Rgb.Hex(0xe0b040);
-                case 'w': return Rgb.Hex(0xe8eef0);
-                case 'g': return Rgb.Hex(0xc09030);
-                case 'h': return Rgb.Hex(0x6a4020);
-                case 'b': return Rgb.Hex(0x2f4a3a);
-            }
-            return null;
-        }
-
-        static Rgb? EnemyPal(EnemySprite s, char ch)
-        {
-            if (ch == 'b') return Rgb.Hex(0x2f4a3a);
-            if (ch == 'k') return Rgb.Hex(0x141014);
-            switch (s)
-            {
-                case EnemySprite.Goblin:
-                    switch (ch)
-                    {
-                        case 'g': return Rgb.Hex(0x6aa040);
-                        case 'y': return Rgb.Hex(0xf0e040);
-                        case 't': return Rgb.Hex(0xf0f0e0);
-                        case 'r': return Rgb.Hex(0x7a5030);
-                        case 'w': return Rgb.Hex(0xc0c8d0);
-                        case 'h': return Rgb.Hex(0x6a4020);
-                    }
-                    break;
-                case EnemySprite.Skeleton:
-                    switch (ch)
-                    {
-                        case 'w': return Rgb.Hex(0xe0dac8);
-                        case 'r': return Rgb.Hex(0x9a6040);
-                        case 'h': return Rgb.Hex(0x5a3a20);
-                    }
-                    break;
-                case EnemySprite.Cultist:
-                    switch (ch)
-                    {
-                        case 'p': return Rgb.Hex(0x3e2c50);
-                        case 'm': return Palette.Mask;
-                        case 'y': return Rgb.Hex(0xc09030);
-                        case 'd': return Rgb.Hex(0xc0c8d0);
-                    }
-                    break;
-                default:
-                    switch (ch)
-                    {
-                        case 'y': return Rgb.Hex(0xe0b040);
-                        case 'r': return Rgb.Hex(0xc02030);
-                        case 'm': return Rgb.Hex(0xefe8da);
-                        case 'c': return Rgb.Hex(0x2e1a36);
-                    }
-                    break;
-            }
-            return Rgb.Hex(0xff00ff);
-        }
-
-        void DrawCombatUi(PixelCanvas c)
-        {
-            TintAt(255, 160, 0.75f);
-            var e = combat.Enemy;
-
-            // barras de vida debaixo das miniaturas
-            if (enemyFade <= 0)
-            {
-                DrawHpBar(c, EnemyMiniX, 180, shownEnemyHp, e.MaxHp, shownEnemyBlock);
-                PixelFont.Small.DrawCentered(c, e.Name + "  AC " + combat.EnemyArmorClass, EnemyMiniX, 186, Palette.Ink);
-                DrawIntent(c);
-            }
-            DrawHpBar(c, PlayerMiniX, 180, shownPlayerHp, run.Sheet.MaxHp, shownBlock);
-            PixelFont.Small.DrawCentered(c, "YOU  AC " + combat.PlayerArmorClass, PlayerMiniX, 186, Palette.Ink);
-            if (combat.NextAttackAdvantage) PixelFont.Small.DrawCentered(c, "ADVANTAGE", PlayerMiniX, 131, Rgb.Hex(0x9a7010));
-
-            // botao de fim de turno
-            TintAt(430, 140, 0.7f);
-            bool canEnd = !Busy && !combat.Over && !scriptActive;
-            bool hov = canEnd && Hover(EndTurnX, EndTurnY, EndTurnW, EndTurnH);
-            c.Fill(EndTurnX + 2, EndTurnY + 2, EndTurnW, EndTurnH, Rgb.Hex(0x2a1a10));
-            c.Fill(EndTurnX, EndTurnY, EndTurnW, EndTurnH, hov ? Rgb.Hex(0xf0d890) : Palette.Paper);
-            c.Rect(EndTurnX, EndTurnY, EndTurnW, EndTurnH, Palette.Ink);
-            PixelFont.Big.DrawCentered(c, "END TURN", EndTurnX + EndTurnW / 2, EndTurnY + 5, canEnd ? Palette.Ink : Palette.Pencil);
-
-            // pilhas de compra e descarte
-            DrawPile(c, 398, 136, combat.DrawPile.Count, "DRAW", true);
-            DrawPile(c, 438, 136, combat.Discard.Count, "DISCARD", false);
-            PixelFont.Small.Draw(c, "TURN " + combat.Turn, 398, 188, Palette.Paper);
-            if (combat.Exhausted.Count > 0) PixelFont.Small.Draw(c, "EXHAUSTED " + combat.Exhausted.Count, 398, 196, Palette.Paper);
-
-            DrawHand(c);
-            c.ResetTint();
-        }
-
-        void DrawHpBar(PixelCanvas c, int cx, int y, int hp, int max, int block)
-        {
-            int w = 44;
-            int x = cx - w / 2;
-            c.Fill(x, y, w, 4, Rgb.Hex(0x3a1a1a));
-            c.Fill(x, y, (int)(w * (float)Math.Max(0, hp) / max), 4, Palette.Red);
-            PixelFont.Small.Draw(c, hp + "/" + max, x + w + 3, y - 1, Palette.Ink);
-            if (block > 0)
-            {
-                c.Sprite(Sprites.IconShield, x - 11, y - 3, ch => ch == 'a' ? Palette.Blue : (ch == 'b' ? Palette.Ink : Palette.White));
-                PixelFont.Small.DrawCentered(c, block.ToString(), x - 7, y - 1, Palette.White);
-            }
-        }
-
-        void DrawIntent(PixelCanvas c)
-        {
-            if (Busy || dice != null) return;
-            var m = combat.Intent;
-            string text;
-            Rgb col;
-            string[] icon;
-            if (m.Kind == MoveKind.Attack)
-            {
-                int bonus = m.AttackBonus - combat.EnemyWeaken;
-                text = m.Name + " " + m.Damage + (combat.HiddenRolls ? " (?)" : " (+" + bonus + ")");
-                col = Palette.DarkRed; icon = Sprites.IconSword;
-            }
-            else if (m.Kind == MoveKind.Guard) { text = m.Name; col = Rgb.Hex(0x2a5a9a); icon = Sprites.IconShield; }
-            else { text = "???"; col = Rgb.Hex(0x6a3a8a); icon = Sprites.IconEye; }
-            int tw = PixelFont.Small.Measure(text) + 16;
-            int x = EnemyMiniX - 24 - tw, y = 132;
-            if (m.Kind == MoveKind.Curse) y += (int)(Math.Sin(time * 3) * 1.5);
-            c.Fill(x, y, tw, 11, Palette.Paper);
-            c.Rect(x, y, tw, 11, col);
-            var ic = col;
-            c.Sprite(icon, x + 2, y + 1, ch => ch == 'c' ? (Rgb?)Palette.White : ic);
-            PixelFont.Small.Draw(c, text, x + 13, y + 3, col);
-        }
-
-        void DrawPile(PixelCanvas c, int x, int y, int count, string label, bool back)
-        {
-            int layers = Math.Min(4, count);
-            for (int i = layers - 1; i >= 0; i--)
-            {
-                int ox = x + i, oy = y - i;
-                c.Fill(ox, oy, 28, 38, back ? Rgb.Hex(0x4a2a5a) : Palette.PaperDark);
-                c.Rect(ox, oy, 28, 38, Palette.Ink);
-                if (back) { c.Rect(ox + 3, oy + 3, 22, 32, Palette.Gold); c.Set(ox + 14, oy + 19, Palette.Gold); }
-            }
-            if (count == 0) { c.Rect(x, y, 28, 38, Palette.Pencil); }
-            PixelFont.Big.DrawCentered(c, count.ToString(), x + 14, y + 12, back ? Palette.Paper : Palette.Ink);
-            PixelFont.Small.DrawCentered(c, label, x + 14, y + 42, Palette.Paper);
-        }
-
-        void DrawHand(PixelCanvas c)
-        {
-            int n = combat.Hand.Count;
-            int hov = (Busy || scriptActive) ? -1 : HoveredCard();
-            for (int i = 0; i < n; i++)
-            {
-                if (i == hov) continue;
-                var card = combat.Hand[i];
-                DrawCard(c, card, CardX(i, n), HandY, combat.CanPlay(card) && !Busy, false);
-            }
-            if (hov >= 0)
-            {
-                var card = combat.Hand[hov];
-                DrawCard(c, card, CardX(hov, n), HandHoverY, combat.CanPlay(card), true);
-            }
-        }
-
-        void DrawCard(PixelCanvas c, CardDef card, int x, int y, bool playable, bool hovered)
+        void DrawCard(PixelCanvas c, CardDef card, int x, int y, bool playable, bool hovered, int cost = -1)
         {
             c.ResetTint();
             if (!hovered) TintAt(x + CardW / 2, Math.Min(H - 1, y + 20), 0.7f);
@@ -577,6 +325,7 @@ namespace DeckDark.View
                 case CardKind.Attack: band = Rgb.Hex(0xa83a3a); kind = "ATTACK"; break;
                 case CardKind.Defense: band = Rgb.Hex(0x3a6aa8); kind = "DEFENSE"; break;
                 case CardKind.Skill: band = Rgb.Hex(0x3a8a5a); kind = "SKILL"; break;
+                case CardKind.Power: band = Rgb.Hex(0xb86020); kind = "POWER"; break;
                 default: band = Rgb.Hex(0x3a1a4a); kind = "CURSE"; break;
             }
 
@@ -591,7 +340,8 @@ namespace DeckDark.View
             {
                 c.FillCircle(x + 7, y + 7, 6, Palette.Ink);
                 c.FillCircle(x + 7, y + 7, 5, Palette.Gold);
-                PixelFont.Big.DrawCentered(c, card.Cost.ToString(), x + 8, y + 2, Palette.Ink);
+                int shownCost = cost >= 0 ? cost : card.Cost;
+                PixelFont.Big.DrawCentered(c, shownCost.ToString(), x + 8, y + 2, shownCost < card.Cost ? Palette.DarkRed : Palette.Ink);
             }
             PixelFont.Small.Draw(c, kind, x + CardW - 3 - PixelFont.Small.Measure(kind), y + 3, Palette.White);
 
@@ -605,11 +355,19 @@ namespace DeckDark.View
             if (card.Icon == CardIcon.Heart || card.Icon == CardIcon.Potion) main = Palette.Red;
             if (card.Icon == CardIcon.Star) main = Rgb.Hex(0xd0a020);
             if (card.Icon == CardIcon.Skull) main = Palette.Mask;
-            c.Fill(x + 6, y + 27, CardW - 12, 22, curse ? Rgb.Hex(0x2a1a2a) : Rgb.Hex(0xd8ccb0));
-            c.Sprite(icon, x + CardW / 2 - 9, y + 29, ch => ch == 'a' ? main : (ch == 'b' ? Palette.Ink : Palette.White), false, 2);
+            if (card.Icon == CardIcon.Blood) main = Rgb.Hex(0xb02020);
+            if (card.Icon == CardIcon.Fist) main = Palette.Skin;
+            if (card.Icon == CardIcon.Flame) main = Rgb.Hex(0xe07020);
+            Rgb glint = Palette.White;
+            if (card.Icon == CardIcon.Die) { main = Palette.White; glint = Palette.Ink; }
+            if (card.Icon == CardIcon.Flame) glint = Palette.Gold;
+            c.Fill(x + 6, y + 26, CardW - 12, 20, curse ? Rgb.Hex(0x2a1a2a) : Rgb.Hex(0xd8ccb0));
+            c.Sprite(icon, x + CardW / 2 - 9, y + 27, ch => ch == 'a' ? main : (ch == 'b' ? Palette.Ink : glint), false, 2);
+            if (card.Rarity == CardRarity.Uncommon) c.FillCircle(x + CardW - 9, y + 30, 2, Palette.Blue);
+            if (card.Rarity == CardRarity.Rare) c.FillCircle(x + CardW - 9, y + 30, 2, Palette.Gold);
 
             // descricao
-            PixelFont.Small.DrawWrapped(c, card.Description(run.Sheet), x + 3, y + 52, CardW - 6, ink, true);
+            PixelFont.Small.DrawWrapped(c, card.Description(run.Sheet), x + 3, y + 48, CardW - 6, ink, true);
             c.ResetTint();
         }
 
@@ -625,6 +383,11 @@ namespace DeckDark.View
                 case CardIcon.Eye: return Sprites.IconEye;
                 case CardIcon.Potion: return Sprites.IconPotion;
                 case CardIcon.Skull: return Sprites.IconSkull;
+                case CardIcon.Blood: return Sprites.IconBlood;
+                case CardIcon.Fist: return Sprites.IconFist;
+                case CardIcon.Mouth: return Sprites.IconMouth;
+                case CardIcon.Die: return Sprites.IconDie;
+                case CardIcon.Flame: return Sprites.IconFlame;
                 default: return Sprites.IconBoot;
             }
         }
@@ -751,11 +514,24 @@ namespace DeckDark.View
         {
             c.ResetTint();
             c.FillAlpha(132, 128, 252, 136, Palette.Black, 0.45f);
-            PixelFont.Big.DrawCentered(c, "WRITE A CARD ON YOUR SHEET", 258, 132, Palette.Paper);
+            PixelFont.Big.DrawCentered(c, "WRITE A CARD ON YOUR SHEET", 258, 131, Palette.Paper);
+            if (rewardRelic != null) PixelFont.Small.DrawCentered(c, "RELIC FOUND - " + rewardRelic, 258, 142, Palette.Gold);
             int hov = -1;
-            for (int i = 0; i < 3; i++) if (Hover(RewardCardX(i), RewardY, CardW, CardH)) hov = i;
-            for (int i = 0; i < 3; i++)
+            for (int i = 0; i < rewardCards.Length; i++) if (Hover(RewardCardX(i), RewardY, CardW, CardH)) hov = i;
+            for (int i = 0; i < rewardCards.Length; i++)
                 DrawCard(c, rewardCards[i], RewardCardX(i), RewardY - (i == hov ? 4 : 0), true, i == hov);
+            if (hov >= 0)
+            {
+                var kws = rewardCards[hov].Keywords();
+                if (kws.Count > 0)
+                {
+                    var parts = new System.Collections.Generic.List<string>();
+                    foreach (var k in kws) parts.Add(Glossary.Explain(k));
+                    pendingTooltip = string.Join("\n", parts);
+                    pendingTooltipX = RewardCardX(hov) + CardW + 4 > W - 122 ? RewardCardX(hov) - 122 : RewardCardX(hov) + CardW + 4;
+                    pendingTooltipY = RewardY;
+                }
+            }
             DrawButton(c, SkipX, SkipY, SkipW, SkipH, "SKIP");
         }
 
@@ -871,7 +647,7 @@ namespace DeckDark.View
             PixelFont.Big.DrawCentered(c, "DEAD", SheetX + SheetW / 2 + 1, SheetY + 70, Palette.Black, 2);
             PixelFont.Big.DrawCentered(c, "DEAD", SheetX + SheetW / 2, SheetY + 69, Palette.Red, 2);
             PixelFont.Big.DrawCentered(c, "YOUR CHARACTER DIED", 256, 150, Palette.Red, 2);
-            PixelFont.Small.DrawCentered(c, "SESSION " + sessions + " - ROOM " + run.Current.Layer + " OF 4", 256, 176, Palette.PaperDark);
+            PixelFont.Small.DrawCentered(c, "SESSION " + sessions + " - ROOM " + run.Current.Layer + " OF " + run.LastLayer, 256, 176, Palette.PaperDark);
         }
 
         void DrawVictory(PixelCanvas c)

@@ -74,12 +74,20 @@ namespace DeckDark.Core
             return Math.Max(0, sum + e.Bonus);
         }
 
-        public TestRoll Test(int modifier, int target, bool advantage, bool disadvantage)
+        public TestRoll Test(int modifier, int target, bool advantage, bool disadvantage, int forcedNatural = 0)
         {
             // vantagem e desvantagem se cancelam
             if (advantage && disadvantage) { advantage = false; disadvantage = false; }
 
             var r = new TestRoll { Modifier = modifier, Target = target, Advantage = advantage, Disadvantage = disadvantage };
+            if (forcedNatural > 0)
+            {
+                // Steady Breath / Loaded Die: o dado ja esta decidido
+                r.Natural = forcedNatural;
+                r.Advantage = false;
+                r.Disadvantage = false;
+                return r;
+            }
             int a = Roll(20);
             if (advantage || disadvantage)
             {

@@ -178,5 +178,89 @@ namespace DeckDark.View
         {
             "..bbbbb..", ".baaaaab.", "baaaaaaab", "baaaaaaab", "baaaaacab", "baaaaaaab", "baaaaaaab", "baaaaaaab", "bbbbbbbbb",
         };
+
+        public static readonly string[] Rat =
+        {
+            "..............",
+            "..............",
+            ".....kk.......",
+            "....kggk......",
+            "...kggggkkkk..",
+            "..kgyggggggkk.",
+            ".kggggggggggk.",
+            "kttggggggggk..",
+            ".kkgggggggk...",
+            "...k.k..k.k...",
+            "..bbbbbbbbbb..",
+            ".bbbbbbbbbbbb.",
+            "..bbbbbbbbbb..",
+        };
+
+        public static readonly string[] Ogre =
+        {
+            ".......kkkkkk.........",
+            "......kggggggk........",
+            ".....kgggggggk........",
+            ".....kgyggygggk.......",
+            ".....kggggggggk.......",
+            "......kgttttgk........",
+            "...kkkkggggggkkkk.....",
+            "..kggggrrrrrrggggk....",
+            ".kggggrrrrrrrrggggk...",
+            ".kgg.krrrrrrrrk.ggk.hh",
+            ".kgg.krrrrrrrrk.ggkhhh",
+            ".kgg.krrrrrrrrk.ggkhh.",
+            "..kk.krrrrrrrrk..kkh..",
+            ".....kwwwwwwwwk...h...",
+            ".....kggk..kggk.......",
+            ".....kggk..kggk.......",
+            ".....kggk..kggk.......",
+            "....kkkkk..kkkkk......",
+            "..bbbbbbbbbbbbbbbbbb..",
+            ".bbbbbbbbbbbbbbbbbbbb.",
+            "..bbbbbbbbbbbbbbbbbb..",
+        };
+
+        public static readonly string[] Ghoul =
+        {
+            ".....kkkkk......",
+            "....kppppppk....",
+            "...kpyppyppk....",
+            "...kppppppk.....",
+            "....kptttpk.....",
+            ".....kpppk......",
+            "...kkppppppkk...",
+            "..kpp.pppp.ppk..",
+            ".kp..pppppp..pk.",
+            "kw...pppppp...wk",
+            ".....pp..pp.....",
+            "....pp....pp....",
+            "....pp....pp....",
+            "...kkk....kkk...",
+            ".bbbbbbbbbbbbbb.",
+            "bbbbbbbbbbbbbbbb",
+            ".bbbbbbbbbbbbbb.",
+        };
+
+        public static readonly string[] IconBlood =
+        {
+            "....a....", "....a....", "...aaa...", "..aacaa..", "..acaaa..", ".aaaaaaa.", ".aaaaaaa.", "..aaaaa..", "...bbb...",
+        };
+        public static readonly string[] IconFist =
+        {
+            ".........", "..aaaaa..", ".aacacab.", ".aaaaaab.", ".aaaaaab.", ".aaaaab..", "..aaab...", "..aaa....", "..bbb....",
+        };
+        public static readonly string[] IconMouth =
+        {
+            ".........", "..bbbbb..", ".baaaaab.", "baccccab.", "ba.....ab", "baccccab.", ".baaaaab.", "..bbbbb..", ".........",
+        };
+        public static readonly string[] IconDie =
+        {
+            "bbbbbbbbb", "baaaaaaab", "bacaaacab", "baaaaaaab", "baaacaaab", "baaaaaaab", "bacaaacab", "baaaaaaab", "bbbbbbbbb",
+        };
+        public static readonly string[] IconFlame =
+        {
+            "....a....", "...aa....", "...aaa.a.", "..aacaaa.", ".aaccaaa.", ".acccaaa.", ".accccaa.", "..acccaa.", "...aaaa..",
+        };
     }
 }

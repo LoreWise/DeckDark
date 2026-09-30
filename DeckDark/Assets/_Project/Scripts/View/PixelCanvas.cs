@@ -232,6 +232,22 @@ namespace DeckDark.View
             }
         }
 
+        /// <summary>Sprite com contorno escuro de 1 pixel, para destacar do fundo claro.</summary>
+        public void SpriteOutlined(string[] rows, int x, int y, Func<char, Rgb?> palette, bool flipX, int scale, Rgb outline)
+        {
+            for (int j = 0; j < rows.Length; j++)
+            {
+                string row = rows[j];
+                for (int i = 0; i < row.Length; i++)
+                {
+                    char ch = row[flipX ? row.Length - 1 - i : i];
+                    if (ch == '.' || ch == ' ') continue;
+                    Fill(x + i * scale - 1, y + j * scale - 1, scale + 2, scale + 2, outline);
+                }
+            }
+            Sprite(rows, x, y, palette, flipX, scale);
+        }
+
         /// <summary>Contorno de 1 pixel ao redor de um sprite (para destacar ao passar o mouse).</summary>
         public void SpriteOutline(string[] rows, int x, int y, Rgb c, int scale = 1)
         {
