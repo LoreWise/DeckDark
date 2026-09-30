@@ -32,6 +32,7 @@ namespace DeckDark.View
             }
             if (screen == GameScreen.NewGame) { screen = GameScreen.Menu; Sfx("click", 0.5f); return; }
             if (screen == GameScreen.Notes) { CloseNotes(); return; }
+            if (screen == GameScreen.Codex) { CloseCodex(); return; }
             if (screen == GameScreen.Menu) return;
             if (paused) { paused = false; Sfx("click", 0.5f); }
             else OpenPause();
@@ -64,9 +65,8 @@ namespace DeckDark.View
         void ClickMenu()
         {
             if (ClickNotesButton()) return;
-            if (Hover(MenuBtnX, MenuBtnY(0), MenuBtnW, MenuBtnH)) { Sfx("click"); screen = GameScreen.NewGame; }
-            else if (Hover(MenuBtnX, MenuBtnY(1), MenuBtnW, MenuBtnH)) OpenOptions(false);
-            else if (Hover(MenuBtnX, MenuBtnY(2), MenuBtnW, MenuBtnH)) { Sfx("click"); host.Quit(); }
+            // botoes montados em SaveHooks.MenuEntries (CONTINUE, NEW GAME, OPTIONS, CODEX, QUIT)
+            ClickMenuEntries();
         }
 
         void DrawMenu(PixelCanvas c, bool buttons = true)
@@ -79,8 +79,7 @@ namespace DeckDark.View
             PixelFont.Small.DrawCentered(c, "A CARD GAME IN A BASEMENT. SATURDAY, 1991.", 240, y + 42, Palette.PaperDark);
 
             if (!buttons) return;
-            string[] labels = { "NEW GAME", "OPTIONS", "QUIT" };
-            for (int i = 0; i < labels.Length; i++) DrawButton(c, MenuBtnX, MenuBtnY(i), MenuBtnW, MenuBtnH, labels[i]);
+            DrawMenuEntries(c);
             DrawNotesButton(c);
 
             string stats = "SESSIONS " + sessions + "   DEATHS " + deaths + "   WINS " + wins;
@@ -249,8 +248,9 @@ namespace DeckDark.View
             if (optionsFromPause) { ClickOptions(); return; }
             if (Hover(PauseBtnX, PauseBtnY(0), PauseBtnW, 17)) { paused = false; Sfx("click", 0.5f); }
             else if (Hover(PauseBtnX, PauseBtnY(1), PauseBtnW, 17)) OpenOptions(true);
-            else if (Hover(PauseBtnX, PauseBtnY(2), PauseBtnW, 17)) { Sfx("click"); EndRunToMenu(); }
+            else if (Hover(PauseBtnX, PauseBtnY(2), PauseBtnW, 17)) { Sfx("click"); abandonArmed = false; EndRunToMenu(); }   // o save do mapa continua
             else if (Hover(PauseBtnX, PauseBtnY(3), PauseBtnW, 17)) { Sfx("click"); host.Quit(); }
+            else if (Hover(PauseBtnX, PauseBtnY(4), PauseBtnW, 17)) ClickAbandon();   // SaveHooks.cs
         }
 
         void DrawPause(PixelCanvas c)
@@ -258,8 +258,8 @@ namespace DeckDark.View
             if (optionsFromPause) { DrawOptions(c); return; }
             c.ResetTint();
             c.FillAlpha(0, 0, W, H, Palette.Black, 0.55f);
-            DrawNotebook(c, PanelX, PanelY, PanelW, 150, "PAUSED");
-            string[] labels = { "RESUME", "OPTIONS", "ABANDON RUN", "QUIT GAME" };
+            DrawNotebook(c, PanelX, PanelY, PanelW, 164, "PAUSED");
+            string[] labels = { "RESUME", "OPTIONS", "SAVE & MENU", "QUIT GAME", abandonArmed ? "REALLY ABANDON?" : "ABANDON RUN" };
             for (int i = 0; i < labels.Length; i++) DrawButton(c, PauseBtnX, PauseBtnY(i), PauseBtnW, 17, labels[i]);
         }
 

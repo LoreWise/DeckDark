@@ -177,7 +177,7 @@ namespace DeckDark.View
 
         const int NotesX = 104, NotesY = 26, NotesW = 272, NotesH = 216;
         const int NotesBtnY = NotesY + NotesH - 24;
-        const int NotesMenuBtnX = MenuBtnX + MenuBtnW + 16, NotesMenuBtnW = 84;
+        const int NotesMenuBtnW = 84, NotesMenuBtnX = MenuBtnX - 16 - NotesMenuBtnW;   // a esquerda, para nao cobrir o "RUN IN PROGRESS"
 
         int notesPage;           // indice em NotePages
         int notesFresh;          // paginas que ainda nao tinham sido lidas quando o caderno abriu

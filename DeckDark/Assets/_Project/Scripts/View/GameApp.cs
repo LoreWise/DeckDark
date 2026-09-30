@@ -11,6 +11,8 @@ namespace DeckDark.View
         int LoadInt(string key, int defaultValue);
         void SaveInt(string key, int value);
         void DeleteKey(string key);
+        string LoadString(string key, string defaultValue);   // save da run e codex (SaveHooks, CodexView)
+        void SaveString(string key, string value);
         void Quit();
     }
 
@@ -21,7 +23,7 @@ namespace DeckDark.View
         public bool Escape;
     }
 
-    public enum GameScreen { Menu, NewGame, Options, Intro, Map, Combat, Reward, Event, Treasure, Tavern, Death, Victory, Notes }
+    public enum GameScreen { Menu, NewGame, Options, Intro, Map, Combat, Reward, Event, Treasure, Tavern, Death, Victory, Notes, Codex }
 
     public enum GameSpeed { Slow, Normal, Fast }
 
@@ -192,6 +194,7 @@ namespace DeckDark.View
             }
 
             if (input.Click) HandleClick();
+            SaveHooksTick();   // auto-save no mapa e registro do codex (SaveHooks.cs)
             Render();
         }
 
@@ -349,6 +352,7 @@ namespace DeckDark.View
                 case GameScreen.NewGame: ClickNewGame(); return;
                 case GameScreen.Options: ClickOptions(); return;
                 case GameScreen.Notes: ClickNotes(); return;
+                case GameScreen.Codex: ClickCodex(); return;
             }
 
             if (InRun && Hover(MenuTagX, MenuTagY, MenuTagW, MenuTagH)) { OpenPause(); return; }

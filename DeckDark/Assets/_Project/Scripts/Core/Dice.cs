@@ -61,11 +61,21 @@ namespace DeckDark.Core
     {
         readonly Random rng;
 
-        public Dice(int seed) { rng = new Random(seed); }
+        /// <summary>Semente e quantas rolagens ja foram feitas: basta isso para salvar e recriar o estado (ver RunSave).</summary>
+        public readonly int Seed;
+        public long Calls { get; private set; }
 
-        public int Roll(int sides) { return rng.Next(1, sides + 1); }
+        public Dice(int seed) { rng = new Random(seed); Seed = seed; }
 
-        public int Range(int minInclusive, int maxExclusive) { return rng.Next(minInclusive, maxExclusive); }
+        /// <summary>Recria o dado no mesmo ponto da sequencia, repetindo as rolagens ja feitas.</summary>
+        public Dice(int seed, long calls) : this(seed)
+        {
+            for (long i = 0; i < calls; i++) Range(0, 2);
+        }
+
+        public int Roll(int sides) { Calls++; return rng.Next(1, sides + 1); }
+
+        public int Range(int minInclusive, int maxExclusive) { Calls++; return rng.Next(minInclusive, maxExclusive); }
 
         public int Roll(DiceExpr e, bool crit)
         {

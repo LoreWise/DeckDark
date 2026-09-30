@@ -66,7 +66,7 @@ namespace DeckDark.Core
     }
 
     /// <summary>Estado de uma run: ficha, mapa, posicao atual.</summary>
-    public class RunState
+    public partial class RunState
     {
         public readonly Dice Dice;
         public readonly CharacterSheet Sheet;
