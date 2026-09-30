@@ -57,6 +57,7 @@ namespace DeckDark.View
             announcedHidden = false;
             shownPlayerHp = run.Sheet.Hp;
             shownBlock = 0;
+            ClearFx();
             var ev = combat.StartCombat();
             Sfx("card", 0.6f);
             PlayEvents(ev, null);
@@ -126,6 +127,7 @@ namespace DeckDark.View
 
         void ApplyEvent(CombatEvent ev)
         {
+            FxForEvent(ev);
             switch (ev.Type)
             {
                 case EvType.Actor:
@@ -330,6 +332,7 @@ namespace DeckDark.View
         void PlayCard(int idx, int target)
         {
             Sfx("card");
+            if (idx >= 0 && idx < combat.Hand.Count) FxForCardPlayed(combat.Hand[idx], target);
             var ev = combat.Play(idx, target);
             if (ev == null) return;
             PlayEvents(ev, () =>
@@ -453,6 +456,7 @@ namespace DeckDark.View
             public bool Lying, FaceLeft, Flash;
             public int Ring;               // 0 nenhum, 1 alvo (vermelho), 2 agindo (dourado)
             public int Wobble;             // tremida ao levar dano, em pixels
+            public int Lift;               // pulinho (investida e respiracao), em pixels
         }
         public readonly List<MiniView> Minis = new List<MiniView>();
         public bool ShowMat3D;
@@ -471,7 +475,7 @@ namespace DeckDark.View
         void CollectMinis()
         {
             int pj = playerHurt > 0 ? (int)(Math.Sin(time * 60) * 2 * playerHurt) : 0;
-            Minis.Add(new MiniView { Key = IsWizard ? "wizard" : "knight", Rows = NoBase(PlayerSprite), Pal = PlayerPal, X = PlayerMiniX, FeetY = MiniFeetY, Lying = combat.PC.Prone, Wobble = pj });
+            Minis.Add(new MiniView { Key = IsWizard ? "wizard" : "knight", Rows = NoBase(PlayerSprite), Pal = PlayerPal, X = PlayerMiniX + PlayerLungeX(), FeetY = MiniFeetY, Lift = PlayerLift(), Lying = combat.PC.Prone, Wobble = pj });
             int hovered = selectedCard >= 0 ? HoveredEnemy() : -1;
             foreach (int i in ShownEnemies())
             {
@@ -482,7 +486,7 @@ namespace DeckDark.View
                 Minis.Add(new MiniView
                 {
                     Key = sprite.ToString(), Rows = NoBase(EnemySpriteRows(sprite)), Pal = ch => EnemyPal(sprite, ch),
-                    X = EnemyX(i), FeetY = MiniFeetY, FaceLeft = true,
+                    X = EnemyX(i) + EnemyLungeX(i), FeetY = MiniFeetY, FaceLeft = true, Lift = v.Dead ? 0 : EnemyLift(i),
                     Lying = v.Dead || (e.C.Prone && !enemyPhase), Flash = v.Hurt > 0.6f && !v.Dead,
                     Ring = i == actingEnemy ? 2 : (i == hovered ? 1 : 0),
                     Wobble = v.Hurt > 0 ? (int)(Math.Sin(time * 60) * 2 * v.Hurt) : 0,
@@ -502,7 +506,7 @@ namespace DeckDark.View
             int pj = playerHurt > 0 ? (int)(Math.Sin(time * 60) * 2 * playerHurt) : 0;
             c.FillEllipse(PlayerMiniX, MiniFeetY + 1, 15, 4, Rgb.Hex(0x7a7260));
             if (combat.PC.Prone) DrawLyingSprite(c, PlayerSprite, PlayerMiniX, PlayerPal, false);
-            else c.SpriteOutlined(PlayerSprite, PlayerMiniX - 16 + pj, MiniFeetY - PlayerSprite.Length * 2 + 2, PlayerPal, false, 2, Rgb.Hex(0x2a2420));
+            else c.SpriteOutlined(PlayerSprite, PlayerMiniX - 16 + pj + PlayerLungeX(), MiniFeetY - PlayerSprite.Length * 2 + 2 - PlayerLift(), PlayerPal, false, 2, Rgb.Hex(0x2a2420));
 
             int hovered = selectedCard >= 0 ? HoveredEnemy() : -1;
             foreach (int i in ShownEnemies())
@@ -527,7 +531,7 @@ namespace DeckDark.View
                 if (i == actingEnemy) { c.FillEllipse(ex, MiniFeetY + 1, sw + 3, 6, Palette.Gold); c.FillEllipse(ex, MiniFeetY + 1, sw, 4, Rgb.Hex(0x7a7260)); }
                 bool flash = v.Hurt > 0.6f;
                 if (lying) DrawLyingSprite(c, spr, ex, ch => flash ? (Rgb?)Palette.White : EnemyPal(sprite, ch), true);
-                else c.SpriteOutlined(spr, ex - sw + ej, MiniFeetY - spr.Length * 2 + 2, ch => flash ? (Rgb?)Palette.White : EnemyPal(sprite, ch), true, 2, Rgb.Hex(0x2a2420));
+                else c.SpriteOutlined(spr, ex - sw + ej + EnemyLungeX(i), MiniFeetY - spr.Length * 2 + 2 - EnemyLift(i), ch => flash ? (Rgb?)Palette.White : EnemyPal(sprite, ch), true, 2, Rgb.Hex(0x2a2420));
             }
         }
 
@@ -550,6 +554,7 @@ namespace DeckDark.View
 
         void DrawCombatUi(PixelCanvas c)
         {
+            DrawFx(c);
             TintAt(255, 160, 0.78f);
 
             // inimigos: vida, bloqueio, condicoes e intencao
@@ -562,7 +567,7 @@ namespace DeckDark.View
                 DrawHpBar(c, ex, 181, v.Hp, v.MaxHp, v.Block, 34);
                 var spr = EnemySpriteRows(e.Def.Sprite);
                 DrawConditions(c, e.C, 0, ex + spr[0].Length + 1, MiniFeetY - 4, true);
-                if (!Busy && !enemyPhase && dice == null) DrawIntent(c, i, ex);
+                if (!enemyPhase) DrawIntent(c, i, ex);
             }
 
             // jogador
@@ -688,19 +693,67 @@ namespace DeckDark.View
             }
         }
 
+        /// <summary>O que o inimigo vai fazer no proximo turno, em palavras e cores claras.</summary>
+        void IntentParts(EnemyUnit e, out string word, out string value, out Rgb bg, out string[] icon)
+        {
+            var m = e.Intent;
+            value = "";
+            switch (m.Kind)
+            {
+                case MoveKind.Attack:
+                {
+                    bg = Rgb.Hex(0xa8282a); icon = Sprites.IconSword;
+                    word = m.Hits > 1 ? "ATTACK X" + m.Hits : "ATTACK";
+                    if (combat.HiddenRolls) { value = "???"; break; }
+                    int extra = e.Def.CurseScaling ? combat.CurseCount : 0;
+                    value = new DiceExpr(m.Damage.Count, m.Damage.Sides, m.Damage.Bonus + extra).ToString();
+                    // com muitos inimigos o texto fica curto (os detalhes aparecem ao passar o mouse)
+                    if (ShownEnemies().Count <= 2)
+                    {
+                        if (m.ApplyBleed > 0) value += " +BLEED";
+                        else if (m.ApplyPoison > 0) value += " +POISON";
+                        else if (m.KnockProne) value += " +PRONE";
+                    }
+                    else if (m.ApplyBleed > 0 || m.ApplyPoison > 0 || m.KnockProne) value += "+";
+                    break;
+                }
+                case MoveKind.Guard: bg = Rgb.Hex(0x2a5a9a); icon = Sprites.IconShield; word = "BLOCK"; value = m.Guard.ToString(); break;
+                case MoveKind.GuardAlly: bg = Rgb.Hex(0x2a5a9a); icon = Sprites.IconShield; word = "PROTECT"; value = "ALLY " + m.Guard; break;
+                case MoveKind.Frighten: bg = Rgb.Hex(0x6a3a8a); icon = Sprites.IconMouth; word = "SCARE"; value = "WIS DC" + m.SaveDc; break;
+                case MoveKind.Summon: bg = Rgb.Hex(0x4a2a5a); icon = Sprites.IconSkull; word = "SUMMON"; value = "+1 ENEMY"; break;
+                case MoveKind.Curse: bg = Rgb.Hex(0x4a2a5a); icon = Sprites.IconSkull; word = "CURSE"; value = "+NIGHTMARE"; break;
+                default: bg = Rgb.Hex(0x5a5a62); icon = Sprites.IconEye; word = "???"; break;
+            }
+        }
+
         void DrawIntent(PixelCanvas c, int i, int ex)
         {
             var e = combat.Enemies[i];
-            string[] icon;
-            Rgb col;
-            string text = IntentShort(e, out icon, out col);
-            int tw = PixelFont.Small.Measure(text) + 14;
-            int x = ex - tw / 2, y = 130 + (int)(Math.Sin(time * 2 + i) * 1.2);
-            c.Fill(x, y, tw, 11, Palette.Paper);
-            c.Rect(x, y, tw, 11, col);
-            var ic = col;
-            c.Sprite(icon, x + 2, y + 1, ch => ch == 'c' ? (Rgb?)Palette.White : (ch == 'b' ? Palette.Ink : ic));
-            PixelFont.Small.Draw(c, text, x + 12, y + 3, col);
+            string word, value; Rgb bg; string[] icon;
+            IntentParts(e, out word, out value, out bg, out icon);
+            if (e.C.Stunned) { word = "STUNNED"; value = "SKIPS TURN"; bg = Rgb.Hex(0x8a7a3a); icon = Sprites.IconStar; }
+
+            int w = Math.Max(PixelFont.Small.Measure(word) + 12, PixelFont.Small.Measure(value)) + 6;
+            int h = value.Length > 0 ? 18 : 11;
+            int headY = MiniFeetY - EnemySpriteHeight(i) - EnemyLift(i);
+            var shown = ShownEnemies();
+            int slot = shown.IndexOf(i);
+            int stagger = shown.Count >= 3 && slot % 2 == 1 ? 21 : 0;   // em fileiras alternadas para nao encavalar
+            int x = ex - w / 2, y = headY - h - 8 - stagger + (int)Math.Round(Math.Sin(time * 2.5 + i) * 1.0);
+            x = Math.Max(2, Math.Min(W - w - 2, x));
+
+            // ataque pisca de leve para chamar atencao
+            bool attack = e.Intent.Kind == MoveKind.Attack;
+            var border = attack && ((int)(time * 3)) % 2 == 0 ? Palette.Gold : Palette.Ink;
+            c.Fill(x + 1, y + 1, w, h, Palette.Black);
+            c.Fill(x, y, w, h, bg);
+            c.Rect(x, y, w, h, border);
+            // ponteiro para baixo, apontando para o inimigo
+            c.FillTriangle(ex - 3, y + h, ex + 3, y + h, ex, y + h + 4, bg);
+            c.Set(ex, y + h + 4, border);
+            c.Sprite(icon, x + 2, y + 1, ch => ch == 'c' ? (Rgb?)Palette.White : (ch == 'b' ? Palette.Ink : Palette.White));
+            PixelFont.Small.Draw(c, word, x + 12, y + 2, Palette.White);
+            if (value.Length > 0) PixelFont.Small.DrawCentered(c, value, x + w / 2, y + 10, attack ? Rgb.Hex(0xffe0a0) : Palette.White);
         }
 
         void DrawEnemyDetails(PixelCanvas c, int i)

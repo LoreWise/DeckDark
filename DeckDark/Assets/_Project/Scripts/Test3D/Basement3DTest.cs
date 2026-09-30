@@ -335,7 +335,7 @@ namespace DeckDark.Test3D
                 float wpp = WorldPerPixel(p);
                 int w = v.Rows[0].Length + 2, h = v.Rows.Length + 2;
                 float mw = w * 2 * wpp, mh = h * 2 * wpp;
-                p += camYaw * Vector3.right * (v.Wobble * wpp);
+                p += camYaw * Vector3.right * (v.Wobble * wpp) + Vector3.up * (v.Lift * wpp);
                 var mat = MiniMat(v);
 
                 // base redonda (e anel de destaque)

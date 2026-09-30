@@ -311,6 +311,7 @@ namespace DeckDark.View
             }
             shake = Math.Max(0, shake - dt * 12f);
             playerHurt = Math.Max(0, playerHurt - adt * 2.5f);
+            UpdateFx(adt);
             foreach (var v in enemyViews)
             {
                 v.Hurt = Math.Max(0, v.Hurt - adt * 2.5f);

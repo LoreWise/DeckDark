@@ -520,7 +520,7 @@ namespace DeckDark.Core
             {
                 var e = Enemies[i];
                 if (!e.Alive) continue;
-                ev.Add(new CombatEvent { Type = EvType.Actor, Actor = i, Target = i });
+                ev.Add(new CombatEvent { Type = EvType.Actor, Actor = i, Target = i, Amount = (int)e.Intent.Kind, Label = e.Intent.Name });
                 e.Block = 0;
                 ev.Add(new CombatEvent { Type = EvType.Block, Target = i, Amount = 0, BlockAfter = 0 });
 
