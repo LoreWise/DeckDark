@@ -38,24 +38,31 @@ namespace DeckDark.View
         {
             var c = Canvas;
             c.ResetTint();
-            c.CopyFrom(bg);
+            c.TrackAlpha = Use3D;
+            if (Use3D) c.ClearTransparent(); else c.CopyFrom(bg);
 
             int sx = shake > 0 ? fxRng.Next(-(int)shake, (int)shake + 1) : 0;
             int sy = shake > 0 ? fxRng.Next(-(int)shake, (int)shake + 1) : 0;
 
             // ---- Mundo (recebe a luz da lampada) ----
-            DrawClockHands(c);
-            DrawFriend(c);
-            DrawLampShade(c);
+            if (!Use3D)
+            {
+                DrawClockHands(c);
+                DrawFriend(c);
+                DrawLampShade(c);
+            }
             DrawCrumpledSheets(c);
             DrawRulesNotebook(c);
             c.OffX = sx; c.OffY = sy;
             if (screen == GameScreen.Combat) DrawCombatTable(c);
             c.OffX = 0; c.OffY = 0;
-            DrawDmScreen(c);
+            if (!Use3D) DrawDmScreen(c);
             ApplyLighting();
-            DrawMask(c);
-            DrawBulbGlow(c);
+            if (!Use3D)
+            {
+                DrawMask(c);
+                DrawBulbGlow(c);
+            }
 
             // ---- Interface (objetos de papel com luz aproximada) ----
             pendingTooltip = null;

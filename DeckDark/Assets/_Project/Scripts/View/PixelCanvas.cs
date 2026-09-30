@@ -31,6 +31,9 @@ namespace DeckDark.View
     {
         public readonly int W, H;
         public readonly Rgb[] Px;
+        /// <summary>Cobertura de cada pixel (0 = transparente). So importa com TrackAlpha ligado (modo mesa 3D).</summary>
+        public readonly byte[] A;
+        public bool TrackAlpha;
 
         // Multiplicador de luz aplicado a tudo que for desenhado (usado para iluminar objetos)
         public float TintR = 1f, TintG = 1f, TintB = 1f;
@@ -41,6 +44,7 @@ namespace DeckDark.View
         {
             W = w; H = h;
             Px = new Rgb[w * h];
+            A = new byte[w * h];
         }
 
         public void SetTint(float f) { TintR = TintG = TintB = f; }
@@ -53,18 +57,41 @@ namespace DeckDark.View
             return new Rgb((int)(c.R * TintR), (int)(c.G * TintG), (int)(c.B * TintB));
         }
 
-        public void CopyFrom(PixelCanvas other) { Array.Copy(other.Px, Px, Px.Length); }
+        public void CopyFrom(PixelCanvas other) { Array.Copy(other.Px, Px, Px.Length); Array.Copy(other.A, A, A.Length); }
 
         public void Clear(Rgb c)
         {
-            for (int i = 0; i < Px.Length; i++) Px[i] = c;
+            for (int i = 0; i < Px.Length; i++) { Px[i] = c; A[i] = 255; }
+        }
+
+        /// <summary>Limpa tudo para transparente (o fundo 3D aparece por tras).</summary>
+        public void ClearTransparent()
+        {
+            Array.Clear(Px, 0, Px.Length);
+            Array.Clear(A, 0, A.Length);
+        }
+
+        /// <summary>Mistura "por cima" levando em conta a cobertura do pixel de baixo.</summary>
+        void Over(int i, Rgb c, float a)
+        {
+            int da = A[i];
+            if (da >= 255) { Px[i] = Rgb.Lerp(Px[i], c, a); return; }
+            float db = da / 255f;
+            float oa = a + db * (1f - a);
+            if (oa <= 0.001f) return;
+            var d = Px[i];
+            float k = db * (1f - a);
+            Px[i] = new Rgb((int)((c.R * a + d.R * k) / oa), (int)((c.G * a + d.G * k) / oa), (int)((c.B * a + d.B * k) / oa));
+            A[i] = (byte)(oa * 255f);
         }
 
         public void Set(int x, int y, Rgb c)
         {
             x += OffX; y += OffY;
             if ((uint)x >= (uint)W || (uint)y >= (uint)H) return;
-            Px[y * W + x] = Tinted(c);
+            int i = y * W + x;
+            Px[i] = Tinted(c);
+            A[i] = 255;
         }
 
         public Rgb Get(int x, int y)
@@ -78,6 +105,7 @@ namespace DeckDark.View
             x += OffX; y += OffY;
             if ((uint)x >= (uint)W || (uint)y >= (uint)H) return;
             int i = y * W + x;
+            if (TrackAlpha) { Over(i, Tinted(c), a); return; }
             Px[i] = Rgb.Lerp(Px[i], Tinted(c), a);
         }
 
@@ -95,6 +123,13 @@ namespace DeckDark.View
             int x1 = Math.Min(W, x + w), y1 = Math.Min(H, y + h);
             if (x0 >= x1 || y0 >= y1) return;
             var t = Tinted(c);
+            if (TrackAlpha)
+            {
+                float fa = Math.Max(0f, Math.Min(1f, a));
+                for (int j = y0; j < y1; j++)
+                    for (int i = x0; i < x1; i++) Over(j * W + i, t, fa);
+                return;
+            }
             int ia = (int)(Math.Max(0f, Math.Min(1f, a)) * 256);
             int cr = t.R, cg = t.G, cb = t.B;
             for (int j = y0; j < y1; j++)

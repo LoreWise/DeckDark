@@ -68,6 +68,14 @@ namespace DeckDark.View
         Action scriptDone;
         bool maskOn;
 
+        // ---- mesa 3D: o cenario vem do Unity, o jogo desenha so a interface por cima ----
+        public bool Use3D;
+        public bool MaskOn { get { return maskOn; } }
+        public float Lamp { get { return LampIntensity; } }
+        public float DreadLevel { get { return Dread; } }
+        public bool CombatScreen { get { return screen == GameScreen.Combat; } }
+        public float Shake { get { return shake; } }
+
         // ---------- Sequenciador de animacoes ----------
         class Beat { public float At; public Action Act; }
         readonly List<Beat> beats = new List<Beat>();

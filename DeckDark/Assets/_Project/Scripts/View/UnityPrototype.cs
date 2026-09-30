@@ -62,6 +62,7 @@ namespace DeckDark.View
             SetupAudio();
             game = new GameApp(this);
             startTime = Time.unscaledTime;
+            Set3D(PlayerPrefs.GetInt("deckdark_use3d", 1) == 1);
         }
 
         void SetupAudio()
@@ -85,8 +86,27 @@ namespace DeckDark.View
             droneSource.Play();
         }
 
+        DeckDark.Test3D.Basement3DTest table3D;
+        bool use3D;
+
+        void Set3D(bool on)
+        {
+            use3D = on;
+            if (on && table3D == null) table3D = DeckDark.Test3D.Basement3DTest.Open();
+            if (table3D != null) table3D.enabled = on;
+            game.Use3D = on;
+            PlayerPrefs.SetInt("deckdark_use3d", on ? 1 : 0);
+            PlayerPrefs.Save();
+        }
+
         void Update()
         {
+            // F3 alterna entre a mesa 3D e o cenario 2D antigo
+#if ENABLE_INPUT_SYSTEM
+            if (Keyboard.current != null && Keyboard.current.f3Key.wasPressedThisFrame) Set3D(!use3D);
+#else
+            if (Input.GetKeyDown(KeyCode.F3)) Set3D(!use3D);
+#endif
             ComputeRect();
 
             var input = new GameInput();
@@ -118,6 +138,13 @@ namespace DeckDark.View
             input.Escape = escape;
 
             game.Update(Time.unscaledDeltaTime, input);
+            if (use3D && table3D != null)
+            {
+                table3D.LampLevel = game.Lamp;
+                table3D.DreadLevel = game.DreadLevel;
+                table3D.MaskOn = game.MaskOn;
+                table3D.ShakeAmount = game.Shake;
+            }
             UploadCanvas();
         }
 
@@ -136,6 +163,8 @@ namespace DeckDark.View
         void UploadCanvas()
         {
             var px = game.Canvas.Px;
+            var al = game.Canvas.A;
+            bool alpha = use3D;
             int w = GameApp.W, h = GameApp.H;
             for (int y = 0; y < h; y++)
             {
@@ -144,7 +173,7 @@ namespace DeckDark.View
                 for (int x = 0; x < w; x++)
                 {
                     var p = px[src + x];
-                    buffer[dst + x] = new Color32(p.R, p.G, p.B, 255);
+                    buffer[dst + x] = new Color32(p.R, p.G, p.B, alpha ? al[src + x] : (byte)255);
                 }
             }
             screenTex.SetPixels32(buffer);
@@ -155,7 +184,8 @@ namespace DeckDark.View
         {
             if (Event.current.type != EventType.Repaint) return;
             GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), blackTex);
-            GUI.DrawTexture(drawRect, screenTex, ScaleMode.StretchToFill, false);
+            if (use3D && table3D != null) GUI.DrawTexture(drawRect, table3D.Output, ScaleMode.StretchToFill, false);
+            GUI.DrawTexture(drawRect, screenTex, ScaleMode.StretchToFill, use3D);
         }
 
         // ---------------- IGameHost ----------------
