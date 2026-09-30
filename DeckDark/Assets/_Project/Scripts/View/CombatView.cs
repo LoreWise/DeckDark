@@ -443,8 +443,56 @@ namespace DeckDark.View
         // =====================================================================
 
         /// <summary>A parte "fisica": papel quadriculado e as miniaturas. Recebe a luz da lampada.</summary>
+        // ---- miniaturas para a mesa 3D (o Unity desenha, o jogo so informa onde) ----
+        public class MiniView
+        {
+            public string Key;
+            public string[] Rows;          // sprite sem a base
+            public Func<char, Rgb?> Pal;
+            public int X, FeetY;           // posicao na tela 480x270
+            public bool Lying, FaceLeft, Flash;
+            public int Ring;               // 0 nenhum, 1 alvo (vermelho), 2 agindo (dourado)
+            public int Wobble;             // tremida ao levar dano, em pixels
+        }
+        public readonly List<MiniView> Minis = new List<MiniView>();
+        public bool ShowMat3D;
+        public int MatLeft { get { return MatX; } }
+        public int MatTop { get { return MatY; } }
+        public int MatWidth { get { return MatW; } }
+        public int MatHeight { get { return MatH; } }
+
+        static string[] NoBase(string[] spr)
+        {
+            var r = new string[spr.Length - 3];
+            Array.Copy(spr, r, r.Length);
+            return r;
+        }
+
+        void CollectMinis()
+        {
+            int pj = playerHurt > 0 ? (int)(Math.Sin(time * 60) * 2 * playerHurt) : 0;
+            Minis.Add(new MiniView { Key = IsWizard ? "wizard" : "knight", Rows = NoBase(PlayerSprite), Pal = PlayerPal, X = PlayerMiniX, FeetY = MiniFeetY, Lying = combat.PC.Prone, Wobble = pj });
+            int hovered = selectedCard >= 0 ? HoveredEnemy() : -1;
+            foreach (int i in ShownEnemies())
+            {
+                var e = combat.Enemies[i];
+                var v = enemyViews[i];
+                if (v.Fled) continue;
+                var sprite = e.Def.Sprite;
+                Minis.Add(new MiniView
+                {
+                    Key = sprite.ToString(), Rows = NoBase(EnemySpriteRows(sprite)), Pal = ch => EnemyPal(sprite, ch),
+                    X = EnemyX(i), FeetY = MiniFeetY, FaceLeft = true,
+                    Lying = v.Dead || (e.C.Prone && !enemyPhase), Flash = v.Hurt > 0.6f && !v.Dead,
+                    Ring = i == actingEnemy ? 2 : (i == hovered ? 1 : 0),
+                    Wobble = v.Hurt > 0 ? (int)(Math.Sin(time * 60) * 2 * v.Hurt) : 0,
+                });
+            }
+        }
+
         void DrawCombatTable(PixelCanvas c)
         {
+            if (Use3D) { ShowMat3D = true; CollectMinis(); return; }
             c.Fill(MatX, MatY, MatW, MatH, Rgb.Hex(0xd8d2bc));
             for (int gx = MatX; gx < MatX + MatW; gx += 10) c.VLine(gx, MatY, MatY + MatH - 1, Rgb.Hex(0xb4c4c8));
             for (int gy = MatY; gy < MatY + MatH; gy += 10) c.HLine(MatX, MatX + MatW - 1, gy, Rgb.Hex(0xb4c4c8));
@@ -453,8 +501,8 @@ namespace DeckDark.View
             // jogador (deitado se estiver PRONE)
             int pj = playerHurt > 0 ? (int)(Math.Sin(time * 60) * 2 * playerHurt) : 0;
             c.FillEllipse(PlayerMiniX, MiniFeetY + 1, 15, 4, Rgb.Hex(0x7a7260));
-            if (combat.PC.Prone) DrawLyingSprite(c, Sprites.Knight, PlayerMiniX, KnightPal, false);
-            else c.SpriteOutlined(Sprites.Knight, PlayerMiniX - 16 + pj, MiniFeetY - Sprites.Knight.Length * 2 + 2, KnightPal, false, 2, Rgb.Hex(0x2a2420));
+            if (combat.PC.Prone) DrawLyingSprite(c, PlayerSprite, PlayerMiniX, PlayerPal, false);
+            else c.SpriteOutlined(PlayerSprite, PlayerMiniX - 16 + pj, MiniFeetY - PlayerSprite.Length * 2 + 2, PlayerPal, false, 2, Rgb.Hex(0x2a2420));
 
             int hovered = selectedCard >= 0 ? HoveredEnemy() : -1;
             foreach (int i in ShownEnemies())
@@ -519,7 +567,7 @@ namespace DeckDark.View
 
             // jogador
             DrawHpBar(c, PlayerMiniX, 181, shownPlayerHp, run.Sheet.MaxHp, shownBlock, 40);
-            DrawConditions(c, combat.PC, combat.Fury, PlayerMiniX + 18, MiniFeetY - 4, false);
+            DrawConditions(c, combat.PC, combat.Fury, PlayerMiniX + 18, MiniFeetY - 4, false, combat.Conc != ConcKind.None ? "C" : null);
             if (combat.NextAttackAdvantage) PixelFont.Small.DrawCentered(c, "ADVANTAGE", PlayerMiniX, 131, Rgb.Hex(0x9a7010));
             else if (combat.ForcedNatural > 0) PixelFont.Small.DrawCentered(c, "NEXT d20: " + combat.ForcedNatural, PlayerMiniX, 131, Rgb.Hex(0x9a7010));
 
@@ -574,9 +622,10 @@ namespace DeckDark.View
         }
 
         /// <summary>Etiquetas pequenas de condicao, empilhadas ao lado da miniatura.</summary>
-        void DrawConditions(PixelCanvas c, Conditions cond, int fury, int x, int bottomY, bool enemy)
+        void DrawConditions(PixelCanvas c, Conditions cond, int fury, int x, int bottomY, bool enemy, string conc = null)
         {
             var tags = new List<KeyValuePair<string, Rgb>>();
+            if (conc != null) tags.Add(new KeyValuePair<string, Rgb>(conc, Palette.Blue));
             if (cond.Bleed > 0) tags.Add(new KeyValuePair<string, Rgb>("B" + cond.Bleed, Palette.Red));
             if (cond.Prone) tags.Add(new KeyValuePair<string, Rgb>("PR", Rgb.Hex(0x8a7a5a)));
             if (cond.Grappled > 0) tags.Add(new KeyValuePair<string, Rgb>("GR", Rgb.Hex(0xc08030)));
@@ -723,6 +772,27 @@ namespace DeckDark.View
                     pendingTooltipY = HandHoverY;
                 }
             }
+        }
+
+        bool IsWizard { get { return run != null && run.Sheet.Class == PlayerClass.Wizard; } }
+        string[] PlayerSprite { get { return IsWizard ? Sprites.Wizard : Sprites.Knight; } }
+        Func<char, Rgb?> PlayerPal { get { return IsWizard ? (Func<char, Rgb?>)WizardPal : KnightPal; } }
+
+        static Rgb? WizardPal(char ch)
+        {
+            switch (ch)
+            {
+                case 'k': return Rgb.Hex(0x1a1418);
+                case 'u': return Rgb.Hex(0x3a5a9a);
+                case 'v': return Rgb.Hex(0x243a66);
+                case 'y': return Rgb.Hex(0xe0b040);
+                case 'f': return Rgb.Hex(0xd09a70);
+                case 'e': return Rgb.Hex(0xd8d4cc);
+                case 'o': return Rgb.Hex(0x8ae0f0);
+                case 'h': return Rgb.Hex(0x7a5030);
+                case 'b': return Rgb.Hex(0x2f4a3a);
+            }
+            return null;
         }
 
         static Rgb? KnightPal(char ch)

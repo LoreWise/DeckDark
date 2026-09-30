@@ -6,6 +6,28 @@ namespace DeckDark.View
     /// </summary>
     public static class Sprites
     {
+        public static readonly string[] Wizard =
+        {
+            "........k.......",
+            ".......kuk......",
+            "......kuuyk.....",
+            ".....kuuuuk.....",
+            "....kuyuuuuk....",
+            "..kkkkkkkkkkkk..",
+            ".....kffffk..ko.",
+            ".....kfkkfk.kooo",
+            ".....keeeek..kh.",
+            "....kueeeeuk.kh.",
+            "...kuuueeuuukkh.",
+            "...kuuyyyyuuk.h.",
+            "...kuuuvvuuuk.h.",
+            "....kuuvvuuk..h.",
+            "....kvvvvvvk..h.",
+            "...bbbbbbbbbb...",
+            "..bbbbbbbbbbbb..",
+            "...bbbbbbbbbb...",
+        };
+
         public static readonly string[] Knight =
         {
             "......kkkk......",

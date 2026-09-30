@@ -3,6 +3,7 @@ using System.Collections.Generic;
 namespace DeckDark.Core
 {
     public enum Attr { STR, DEX, CON, INT, WIS, CHA }
+    public enum PlayerClass { Warrior, Wizard }
 
     /// <summary>
     /// A ficha do personagem: atributos, vida, classe de armadura, deck e reliquias.
@@ -10,6 +11,9 @@ namespace DeckDark.Core
     public class CharacterSheet
     {
         public string Name = "WARRIOR";
+        public PlayerClass Class = PlayerClass.Warrior;
+        /// <summary>CD das magias: 8 + proficiencia (2) + INT.</summary>
+        public int SpellDc { get { return 10 + Mod(Attr.INT); } }
         public int Level = 1;
         public readonly int[] Scores = new int[6];
         public int MaxHp;
@@ -61,13 +65,36 @@ namespace DeckDark.Core
             c.Scores[(int)Attr.INT] = 8;
             c.Scores[(int)Attr.WIS] = 10;
             c.Scores[(int)Attr.CHA] = 10;
-            c.MaxHp = 30;
+            c.MaxHp = 34;
             c.Hp = c.MaxHp;
             c.BaseArmorClass = 14;
             for (int i = 0; i < 4; i++) c.Deck.Add(CardLibrary.SwordStrike);
             for (int i = 0; i < 4; i++) c.Deck.Add(CardLibrary.RaiseShield);
             c.Deck.Add(CardLibrary.BrutalStrike);
             c.Deck.Add(CardLibrary.Inspiration);
+            return c;
+        }
+
+        public static CharacterSheet New(PlayerClass cls) { return cls == PlayerClass.Wizard ? NewWizard() : NewWarrior(); }
+
+        public static CharacterSheet NewWizard()
+        {
+            var c = new CharacterSheet();
+            c.Name = "WIZARD";
+            c.Class = PlayerClass.Wizard;
+            c.Scores[(int)Attr.STR] = 8;
+            c.Scores[(int)Attr.DEX] = 14;
+            c.Scores[(int)Attr.CON] = 12;
+            c.Scores[(int)Attr.INT] = 16;
+            c.Scores[(int)Attr.WIS] = 12;
+            c.Scores[(int)Attr.CHA] = 10;
+            c.MaxHp = 22;
+            c.Hp = c.MaxHp;
+            c.BaseArmorClass = 12;
+            for (int i = 0; i < 4; i++) c.Deck.Add(CardLibrary.FireBolt);
+            for (int i = 0; i < 4; i++) c.Deck.Add(CardLibrary.ShieldSpell);
+            c.Deck.Add(CardLibrary.MagicMissile);
+            c.Deck.Add(CardLibrary.ArcaneFocus);
             return c;
         }
 

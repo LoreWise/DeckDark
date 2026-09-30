@@ -90,8 +90,20 @@ namespace DeckDark.View
         static int RuleRowY(int i) { return PanelY + 24 + i * 23; }
         const int NewGameBtnY = PanelY + PanelH - 22;
 
+        // escolha de classe: um cartaozinho a esquerda do caderno de regras
+        const int ClassX = PanelX - 94, ClassY = PanelY + 10, ClassW = 86;
+        static int ClassBtnY(int i) { return ClassY + 22 + i * 22; }
+
         void ClickNewGame()
         {
+            for (int i = 0; i < 2; i++)
+                if (Hover(ClassX + 8, ClassBtnY(i), ClassW - 16, 16))
+                {
+                    selectedClass = (PlayerClass)i;
+                    host.SaveInt("class", i);
+                    Sfx("pencil", 0.6f);
+                    return;
+                }
             for (int i = 0; i < Homebrew.MaxVersion; i++)
             {
                 if (!Hover(PanelX + 4, RuleRowY(i) - 2, PanelW - 8, 22)) continue;
@@ -125,6 +137,20 @@ namespace DeckDark.View
                 string text = unlocked ? Homebrew.Texts[i] : "V" + v + ".0  ???  (WIN ON V" + (v - 1) + ".0 TO UNLOCK)";
                 var col = unlocked ? (selected ? Palette.DarkRed : Palette.Ink) : Rgb.Hex(0xa8a090);
                 PixelFont.Small.DrawWrapped(c, text, PanelX + 18, y, PanelW - 26, col);
+            }
+            // classe
+            c.Fill(ClassX + 3, ClassY + 3, ClassW, 70, Palette.Black);
+            c.Fill(ClassX, ClassY, ClassW, 70, Rgb.Hex(0xe8e0c8));
+            c.Rect(ClassX, ClassY, ClassW, 70, Palette.PaperDark);
+            PixelFont.Big.DrawCentered(c, "CLASS", ClassX + ClassW / 2, ClassY + 5, Palette.Ink);
+            for (int i = 0; i < 2; i++)
+            {
+                DrawButton(c, ClassX + 8, ClassBtnY(i), ClassW - 16, 16, i == 0 ? "WARRIOR" : "WIZARD");
+                if ((int)selectedClass == i)
+                {
+                    c.Rect(ClassX + 6, ClassBtnY(i) - 2, ClassW - 12, 20, Palette.Red);
+                    c.Rect(ClassX + 5, ClassBtnY(i) - 3, ClassW - 10, 22, Palette.Red);
+                }
             }
             DrawButton(c, PanelX + 18, NewGameBtnY, 64, 16, "BACK");
             DrawButton(c, PanelX + PanelW - 72, NewGameBtnY, 64, 16, "START");

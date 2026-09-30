@@ -144,6 +144,7 @@ namespace DeckDark.View
                 table3D.DreadLevel = game.DreadLevel;
                 table3D.MaskOn = game.MaskOn;
                 table3D.ShakeAmount = game.Shake;
+                table3D.SetCombat(game.Minis, game.ShowMat3D, game.MatLeft, game.MatTop, game.MatWidth, game.MatHeight);
             }
             UploadCanvas();
         }

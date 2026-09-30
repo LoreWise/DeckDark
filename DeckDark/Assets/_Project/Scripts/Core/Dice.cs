@@ -14,9 +14,10 @@ namespace DeckDark.Core
         public int Target;       // CA ou CD a vencer
         public bool Advantage;
         public bool Disadvantage;
+        public int CritOn;       // menor natural que conta como critico (0 = so 20)
 
         public int Total { get { return Natural + Modifier; } }
-        public bool IsCrit { get { return Natural == 20; } }
+        public bool IsCrit { get { return Natural >= (CritOn > 0 ? CritOn : 20); } }
         public bool IsFumble { get { return Natural == 1; } }
 
         /// <summary>No D&D, 20 natural sempre acerta e 1 natural sempre erra.</summary>

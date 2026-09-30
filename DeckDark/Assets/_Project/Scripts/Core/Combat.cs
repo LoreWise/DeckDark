@@ -93,6 +93,13 @@ namespace DeckDark.Core
         public bool EnemyCanReroll;
         bool luckyCoinUsed;
         bool firstAttackDone;
+        public int Keen;               // critico com N a menos
+        public bool StubbornActive;
+        public int AttacksThisTurn;
+        public ConcKind Conc;          // magia de concentracao ativa
+        public int ConcValue;
+        public string ConcName;
+        public int SpellFocusBonus;
 
         public readonly List<CardDef> DrawPile = new List<CardDef>();
         public readonly List<CardDef> Hand = new List<CardDef>();
@@ -194,8 +201,13 @@ namespace DeckDark.Core
             Block = 0;
             ArmorBuff = 0;
             RiposteActive = false;
+            AttacksThisTurn = 0;
             if (PC.Prone) { PC.Prone = false; ev.Add(Status(-1, "YOU STAND UP", Tone.Neutral)); }
             Energy = Sheet.EnergyPerTurn;
+            if (Conc == ConcKind.Ward) { Block += ConcValue; ev.Add(new CombatEvent { Type = EvType.Block, Target = -1, Amount = ConcValue, BlockAfter = Block }); }
+            if (Conc == ConcKind.Haste) { Energy += ConcValue; ev.Add(new CombatEvent { Type = EvType.Energy, Amount = ConcValue }); }
+            if (Conc == ConcKind.Burn)
+                for (int i = 0; i < Enemies.Count; i++) if (Enemies[i].Alive) DamageEnemy(i, ConcValue, false, false, "FLAMES", ev);
             int n = DrawCards(Sheet.HandSize);
             ev.Add(new CombatEvent { Type = EvType.Draw, Amount = n });
         }
@@ -238,15 +250,42 @@ namespace DeckDark.Core
                 ev.Add(new CombatEvent { Type = EvType.Energy, Amount = card.EnergyGain });
             }
 
-            for (int h = 0; h < card.Hits && t != null && t.Alive; h++) PlayerAttack(target, card, ev);
-
-            if (card.Save != SaveEffect.None && !card.SaveOnlyOnHit)
+            if (card.Hits > 0 && card.AllEnemies)
             {
+                for (int i = 0; i < Enemies.Count; i++)
+                    for (int h = 0; h < card.Hits && Enemies[i].Alive; h++) PlayerAttack(i, card, ev);
+            }
+            else
+                for (int h = 0; h < card.Hits && t != null && t.Alive; h++) PlayerAttack(target, card, ev);
+            if (card.SpellDamage)
+            {
+                if (card.AllEnemies) { for (int i = 0; i < Enemies.Count; i++) if (Enemies[i].Alive) SpellHit(i, card, ev); }
+                else if (t != null && t.Alive) SpellHit(target, card, ev);
+                SpellFocusBonus = 0;
+            }
+            for (int h = 0; h < card.AutoHits && t != null && t.Alive; h++)
+                DamageEnemy(target, dice.Roll(card.Damage, false), false, false, "DART", ev);
+            if (card.Hits > 0 || card.SpellDamage || card.AutoHits > 0) AttacksThisTurn++;
+            if (card.SpellFocus > 0) { SpellFocusBonus += card.SpellFocus; ev.Add(Status(-1, "SPELL DC " + (Sheet.SpellDc + SpellFocusBonus), Tone.Blue)); }
+            if (card.Concentrate != ConcKind.None)
+            {
+                if (Conc != ConcKind.None) ev.Add(Status(-1, ConcName + " ENDS", Tone.Neutral));
+                Conc = card.Concentrate; ConcValue = card.ConcValue; ConcName = card.Name;
+                ev.Add(Status(-1, "CONCENTRATING: " + card.Name, Tone.Blue));
+            }
+
+            if (card.Keen > 0) { Keen += card.Keen; ev.Add(Status(-1, "CRIT ON " + (20 - Keen) + "+", Tone.Gold)); }
+            if (card.Stubborn) { StubbornActive = true; ev.Add(Status(-1, "STUBBORN", Tone.Blue)); }
+
+            if (card.Save != SaveEffect.None && !card.SaveOnlyOnHit && !card.SpellDamage)
+            {
+                int dc = card.UseSpellDc ? Sheet.SpellDc + SpellFocusBonus : card.SaveDc;
+                if (card.UseSpellDc) SpellFocusBonus = 0;
                 if (card.AllEnemies)
                 {
-                    for (int i = 0; i < Enemies.Count; i++) if (Enemies[i].Alive) EnemySave(i, card.Save, card.SaveAttr, card.SaveDc, ev);
+                    for (int i = 0; i < Enemies.Count; i++) if (Enemies[i].Alive) EnemySave(i, card.Save, card.SaveAttr, dc, ev);
                 }
-                else if (t != null && t.Alive) EnemySave(target, card.Save, card.SaveAttr, card.SaveDc, ev);
+                else if (t != null && t.Alive) EnemySave(target, card.Save, card.SaveAttr, dc, ev);
             }
 
             if (card.DoubleBleed && t != null && t.Alive)
@@ -315,6 +354,7 @@ namespace DeckDark.Core
             firstAttackDone = true;
 
             var roll = dice.Test(toHit, t.ArmorClass, adv, dis, forced);
+            roll.CritOn = 20 - Keen;
             ev.Add(new CombatEvent { Type = EvType.Roll, Target = ti, Actor = -1, Roll = roll, Label = "YOUR ATTACK" });
 
             if (!roll.Success)
@@ -325,6 +365,7 @@ namespace DeckDark.Core
                 if (reroll)
                 {
                     roll = dice.Test(toHit, t.ArmorClass, adv, dis);
+                    roll.CritOn = 20 - Keen;
                     ev.Add(new CombatEvent { Type = EvType.Roll, Target = ti, Actor = -1, Roll = roll, Label = "REROLL" });
                 }
             }
@@ -332,12 +373,29 @@ namespace DeckDark.Core
             if (!roll.Success)
             {
                 ev.Add(new CombatEvent { Type = EvType.Miss, Target = ti, Roll = roll });
+                if (StubbornActive)
+                {
+                    Block += 3;
+                    NextAttackAdvantage = true;
+                    ev.Add(new CombatEvent { Type = EvType.Block, Target = -1, Amount = 3, BlockAfter = Block });
+                }
                 return;
             }
 
             var dmgExpr = new DiceExpr(card.Damage.Count, card.Damage.Sides, card.Damage.Bonus + mod);
-            int dmg = dice.Roll(dmgExpr, roll.IsCrit) + Fury + (Sheet.HasRelic(RelicId.Whetstone) ? 1 : 0);
+            int dmg = dice.Roll(dmgExpr, roll.IsCrit) + Fury + (Sheet.HasRelic(RelicId.Whetstone) ? 1 : 0)
+                + card.ComboDamage * AttacksThisTurn + (roll.IsCrit ? card.OnCritDamage : 0);
             DamageEnemy(ti, dmg, card.IgnoreBlock, roll.IsCrit, null, ev);
+            if (roll.IsCrit && card.OnCritEnergy > 0)
+            {
+                Energy += card.OnCritEnergy;
+                ev.Add(new CombatEvent { Type = EvType.Energy, Amount = card.OnCritEnergy });
+            }
+            if (roll.IsCrit && card.OnCritDraw > 0)
+            {
+                int n = DrawCards(card.OnCritDraw);
+                ev.Add(new CombatEvent { Type = EvType.Draw, Amount = n });
+            }
 
             if (t.Alive)
             {
@@ -360,8 +418,33 @@ namespace DeckDark.Core
                 ev.Add(Status(ti, attr + " SAVE: " + r.Total + " SAVED", Tone.Neutral));
                 return;
             }
+            ApplySaveEffect(ti, effect, ev);
+        }
+
+        /// <summary>Magia de dano: o alvo rola resistencia contra a CD de magia. Passou = metade do dano.</summary>
+        void SpellHit(int ti, CardDef card, List<CombatEvent> ev)
+        {
+            var t = Enemies[ti];
+            int dc = Sheet.SpellDc + SpellFocusBonus;
+            var r = dice.Test(t.Def.SaveBonus, dc, false, false);
+            int dmg = dice.Roll(new DiceExpr(card.Damage.Count, card.Damage.Sides, card.Damage.Bonus + Sheet.Mod(Attr.INT)), false);
+            if (r.Success)
+            {
+                ev.Add(Status(ti, card.SaveAttr + " SAVE " + r.Total + " VS " + dc + ": HALF", Tone.Neutral));
+                dmg /= 2;
+            }
+            else ev.Add(Status(ti, card.SaveAttr + " SAVE " + r.Total + " VS " + dc + ": FAILED", Tone.Gold));
+            DamageEnemy(ti, dmg, false, false, null, ev);
+            if (!r.Success && t.Alive && card.Save != SaveEffect.None) ApplySaveEffect(ti, card.Save, ev);
+        }
+
+        void ApplySaveEffect(int ti, SaveEffect effect, List<CombatEvent> ev)
+        {
+            var t = Enemies[ti];
             switch (effect)
             {
+                case SaveEffect.Stun: t.C.Stunned = true; ev.Add(Status(ti, "STUNNED!", Tone.Gold)); break;
+                case SaveEffect.Chill: t.Weaken += 2; ev.Add(Status(ti, "CHILLED -2 TO HIT", Tone.Blue)); break;
                 case SaveEffect.Prone: t.C.Prone = true; ev.Add(Status(ti, "PRONE!", Tone.Gold)); break;
                 case SaveEffect.Grapple: t.C.Grappled = 2; t.Block = 0; ev.Add(Status(ti, "GRAPPLED!", Tone.Gold)); break;
                 case SaveEffect.Frighten: t.C.Frightened = 2; ev.Add(Status(ti, "FRIGHTENED!", Tone.Purple)); break;
@@ -577,6 +660,12 @@ namespace DeckDark.Core
             ev.Add(new CombatEvent { Type = EvType.Hit, Target = -1, Actor = i, Amount = real, Blocked = absorbed, HpAfter = Sheet.Hp, BlockAfter = Block, Crit = roll.IsCrit });
             GainFuryFromPain(real, ev);
             if (PlayerDead) return;
+            if (Conc != ConcKind.None && real > 0)
+            {
+                var cs = dice.Test(Sheet.Mod(Attr.CON), Math.Max(10, real / 2), false, false);
+                if (!cs.Success) { ev.Add(Status(-1, "CONCENTRATION LOST: " + ConcName, Tone.Bad)); Conc = ConcKind.None; }
+                else ev.Add(Status(-1, "CON SAVE: STILL FOCUSED", Tone.Good));
+            }
 
             if (move.ApplyBleed > 0)
             {

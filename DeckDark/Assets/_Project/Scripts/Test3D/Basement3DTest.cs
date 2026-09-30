@@ -218,6 +218,145 @@ namespace DeckDark.Test3D
             items.Add(new Item { Mesh = sphere, Mat = bulbMat, Dynamic = () => Matrix4x4.TRS(lampPos + Vector3.up * 0.02f, LampRot(), Vector3.one * 0.09f) });
         }
 
+        // ---------------------------------------------------------------- miniaturas 3D
+
+        const float TableTop = 0.78f;
+        List<DeckDark.View.GameApp.MiniView> minis;
+        bool showMat;
+        int matX, matY, matW, matH;
+        readonly Dictionary<string, Material> miniMats = new Dictionary<string, Material>();
+        Material baseMat, ringRed, ringGold, matMat;
+
+        /// <summary>Chamado pelo jogo a cada quadro com as pecas do combate (posicoes na tela 480x270).</summary>
+        public void SetCombat(List<DeckDark.View.GameApp.MiniView> list, bool mat, int x, int y, int w, int h)
+        {
+            minis = list; showMat = mat; matX = x; matY = y; matW = w; matH = h;
+        }
+
+        /// <summary>Ponto da mesa que aparece no pixel (px, py), pela camera parada (sem o balanco do mouse).</summary>
+        Vector3 OnTable(float px, float py)
+        {
+            var rot0 = Quaternion.LookRotation(camTarget - camPos, Vector3.up);
+            float t = Mathf.Tan(fov * 0.5f * Mathf.Deg2Rad);
+            float nx = px / W * 2f - 1f, ny = 1f - py / H * 2f;
+            var d = rot0 * new Vector3(nx * t * W / H, ny * t, 1f);
+            float k = (TableTop - camPos.y) / d.y;
+            return camPos + d * k;
+        }
+
+        float WorldPerPixel(Vector3 p)
+        {
+            var fwd = (camTarget - camPos).normalized;
+            return 2f * Vector3.Dot(p - camPos, fwd) * Mathf.Tan(fov * 0.5f * Mathf.Deg2Rad) / H;
+        }
+
+        Material MiniMat(DeckDark.View.GameApp.MiniView v)
+        {
+            string key = v.Key + (v.Flash ? "#" : "");
+            Material m;
+            if (miniMats.TryGetValue(key, out m)) return m;
+            int w = v.Rows[0].Length, h = v.Rows.Length;
+            var tex = new Texture2D(w + 2, h + 2, TextureFormat.RGBA32, false);
+            var px = new Color32[(w + 2) * (h + 2)];
+            var solid = new bool[w + 2, h + 2];
+            for (int j = 0; j < h; j++)
+                for (int i = 0; i < w; i++)
+                {
+                    char ch = v.Rows[j][i];
+                    if (ch == '.' || ch == ' ') continue;
+                    var c = v.Pal(ch);
+                    if (!c.HasValue) continue;
+                    var col = v.Flash ? new Color32(244, 239, 228, 255) : new Color32(c.Value.R, c.Value.G, c.Value.B, 255);
+                    int x = i + 1, y = h - j;   // textura comeca embaixo
+                    px[y * (w + 2) + x] = col; solid[x, y] = true;
+                }
+            // contorno escuro, como tinta de miniatura
+            for (int y = 0; y < h + 2; y++)
+                for (int x = 0; x < w + 2; x++)
+                {
+                    if (solid[x, y]) continue;
+                    bool nb = (x > 0 && solid[x - 1, y]) || (x < w + 1 && solid[x + 1, y]) || (y > 0 && solid[x, y - 1]) || (y < h + 1 && solid[x, y + 1]);
+                    if (nb) px[y * (w + 2) + x] = new Color32(42, 36, 32, 255);
+                }
+            tex.SetPixels32(px);
+            tex.filterMode = FilterMode.Point;
+            tex.wrapMode = TextureWrapMode.Clamp;
+            tex.Apply();
+            m = Mat(tex, Color.white, Vector2.one, v.Flash ? 0.6f : 0f, 0.6f);
+            miniMats[key] = m;
+            return m;
+        }
+
+        Texture2D GridTexture()
+        {
+            var t = new Texture2D(32, 32, TextureFormat.RGBA32, false);
+            var paper = new Color32(216, 210, 188, 255); var line = new Color32(180, 196, 200, 255);
+            for (int y = 0; y < 32; y++)
+                for (int x = 0; x < 32; x++)
+                    t.SetPixel(x, y, (x % 16 == 0 || y % 16 == 0) ? line : paper);
+            t.filterMode = FilterMode.Point; t.wrapMode = TextureWrapMode.Repeat; t.Apply();
+            return t;
+        }
+
+        void Draw(Mesh mesh, Material mat, Matrix4x4 m)
+        {
+            mat.SetMatrix("_DD_M", m);
+            if (mat.SetPass(0)) Graphics.DrawMeshNow(mesh, m);
+        }
+
+        /// <summary>Tabuleiro de papel e miniaturas. Roda depois dos opacos da sala.</summary>
+        void DrawCombatPieces()
+        {
+            if (baseMat == null)
+            {
+                baseMat = Mat(white, new Color(0.2f, 0.19f, 0.17f), Vector2.one);
+                ringRed = Mat(white, new Color(0.85f, 0.25f, 0.2f), Vector2.one, 0.7f);
+                ringGold = Mat(white, new Color(0.95f, 0.75f, 0.25f), Vector2.one, 0.7f);
+                matMat = Mat(GridTexture(), Color.white, Vector2.one);
+            }
+            var camYaw = Quaternion.Euler(0, Mathf.Atan2(camPos.x - camTarget.x, camPos.z - camTarget.z) * Mathf.Rad2Deg + 180f, 0);
+
+            if (showMat)
+            {
+                // folha de papel de tamanho fixo, centrada nos pes das miniaturas (fica antes do escudo do mestre)
+                float feet = matY + matH * 0.75f;
+                var c = OnTable(matX + matW * 0.5f, feet);
+                float width = Mathf.Min(1.05f, (OnTable(matX + matW, feet) - OnTable(matX, feet)).magnitude + 0.1f);
+                float depth = 0.46f;
+                c.z = Mathf.Min(c.z, 0.6f - depth * 0.5f);
+                matMat.SetVector("_Tiling", new Vector4(width / 0.07f, depth / 0.07f, 0, 0));
+                Draw(quad, matMat, Matrix4x4.TRS(c + Vector3.up * 0.0015f, Quaternion.Euler(90, 0, 0), new Vector3(width, depth, 1)));
+            }
+            if (minis == null) return;
+
+            foreach (var v in minis)
+            {
+                var p = OnTable(v.X, v.FeetY);
+                float wpp = WorldPerPixel(p);
+                int w = v.Rows[0].Length + 2, h = v.Rows.Length + 2;
+                float mw = w * 2 * wpp, mh = h * 2 * wpp;
+                p += camYaw * Vector3.right * (v.Wobble * wpp);
+                var mat = MiniMat(v);
+
+                // base redonda (e anel de destaque)
+                float r = v.Rows[0].Length * 2 * wpp * 0.85f;
+                if (v.Ring > 0) Draw(cyl, v.Ring == 1 ? ringRed : ringGold, Matrix4x4.TRS(p + Vector3.up * 0.003f, Quaternion.identity, new Vector3(r * 1.3f, 0.003f, r * 0.9f)));
+                if (!v.Lying) Draw(cyl, baseMat, Matrix4x4.TRS(p + Vector3.up * 0.007f, Quaternion.identity, new Vector3(r, 0.007f, r * 0.7f)));
+
+                float flip = v.FaceLeft ? -1f : 1f;
+                if (v.Lying)
+                {
+                    // tombada de lado sobre a mesa
+                    var rot = camYaw * Quaternion.Euler(90, 0, v.FaceLeft ? -90 : 90);
+                    Draw(quad, mat, Matrix4x4.TRS(p + Vector3.up * 0.004f, rot, new Vector3(mw * flip, mh, 1)));
+                }
+                else
+                {
+                    Draw(quad, mat, Matrix4x4.TRS(p + Vector3.up * (0.014f + mh * 0.5f), camYaw, new Vector3(mw * flip, mh, 1)));
+                }
+            }
+        }
+
         Item d20Item, rafaItem;
         Material rafaFace, rafaMask;
 
@@ -332,6 +471,7 @@ namespace DeckDark.Test3D
             // opacos primeiro, depois os transparentes (sombras) do mais longe para o mais perto
             for (int pass = 0; pass < 2; pass++)
             {
+                if (pass == 1) DrawCombatPieces();
                 foreach (var it in items)
                 {
                     if (it.Blend != (pass == 1)) continue;

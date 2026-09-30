@@ -70,6 +70,7 @@ namespace DeckDark.View
 
         // ---- mesa 3D: o cenario vem do Unity, o jogo desenha so a interface por cima ----
         public bool Use3D;
+        PlayerClass selectedClass;
         public bool MaskOn { get { return maskOn; } }
         public float Lamp { get { return LampIntensity; } }
         public float DreadLevel { get { return Dread; } }
@@ -126,6 +127,7 @@ namespace DeckDark.View
             // Quem jogou a versao anterior ja liberou versoes com as vitorias antigas
             unlockedRules = Math.Max(1, Math.Min(Homebrew.MaxVersion, host.LoadInt("unlocked", 1 + wins)));
             selectedRules = Math.Max(1, Math.Min(unlockedRules, host.LoadInt("selected", unlockedRules)));
+            selectedClass = (PlayerClass)Math.Max(0, Math.Min(1, host.LoadInt("class", 0)));
             speed = (GameSpeed)Math.Max(0, Math.Min(2, host.LoadInt("speed", (int)GameSpeed.Normal)));
             maskOn = sessions > 0;
         }
@@ -378,7 +380,7 @@ namespace DeckDark.View
             host.SaveInt("sessions", sessions);
             host.SaveInt("selected", selectedRules);
             BuildStaticScene();
-            run = new RunState(Environment.TickCount, selectedRules);
+            run = new RunState(Environment.TickCount, selectedRules, selectedClass);
             combat = null;
             beats.Clear();
             dice = null;

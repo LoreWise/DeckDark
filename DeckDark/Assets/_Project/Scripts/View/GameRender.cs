@@ -17,7 +17,11 @@ namespace DeckDark.View
         static int ChoiceY(int i) { return 194 + i * 21; }
         static int RewardCardX(int i) { return 255 - CardW / 2 + (i - 1) * 74; }
 
-        static int NodeX(int layer) { return 152 + layer * 36; }
+        // o mapa e maior que o papel: mostra 7 camadas e rola conforme voce avanca
+        float mapScroll;
+        float MapScrollTarget { get { return run == null ? 0 : Math.Max(0, Math.Min(run.LastLayer - 6, run.Current.Layer - 1)); } }
+        int NodeX(int layer) { return 152 + (int)Math.Round((layer - mapScroll) * 36); }
+        bool NodeOnPaper(int layer) { int x = NodeX(layer); return x >= 142 && x <= 376; }
         static int NodeY(int layer, int index, int count) { return 200 + (int)((index - (count - 1) / 2f) * 38); }
 
         MapNode HoveredNode()
@@ -26,6 +30,7 @@ namespace DeckDark.View
             foreach (var layer in run.Layers)
                 foreach (var n in layer)
                 {
+                    if (!NodeOnPaper(n.Layer)) continue;
                     int dx = input.X - NodeX(n.Layer), dy = input.Y - NodeY(n.Layer, n.Index, layer.Count);
                     if (dx * dx + dy * dy <= 12 * 12) return n;
                 }
@@ -39,6 +44,8 @@ namespace DeckDark.View
             var c = Canvas;
             c.ResetTint();
             c.TrackAlpha = Use3D;
+            Minis.Clear();
+            ShowMat3D = false;
             if (Use3D) c.ClearTransparent(); else c.CopyFrom(bg);
 
             int sx = shake > 0 ? fxRng.Next(-(int)shake, (int)shake + 1) : 0;
@@ -215,7 +222,10 @@ namespace DeckDark.View
             PixelFont.Small.Draw(c, "DUNGEON OF THE FACELESS KING", x + 6, y + 4, Palette.Pencil);
             PixelFont.Small.Draw(c, "FLOOR 1", x + w - 32, y + 4, Palette.Pencil);
 
+            mapScroll += (MapScrollTarget - mapScroll) * Math.Min(1f, 0.08f);
+            if (Math.Abs(MapScrollTarget - mapScroll) < 0.01f) mapScroll = MapScrollTarget;
             var hovered = HoveredNode();
+            c.ClipX0 = x + 2; c.ClipX1 = x + w - 2;
 
             // caminhos
             foreach (var layer in run.Layers)
@@ -235,6 +245,7 @@ namespace DeckDark.View
             foreach (var layer in run.Layers)
                 foreach (var n in layer)
                 {
+                    if (NodeX(n.Layer) < x - 12 || NodeX(n.Layer) > x + w + 12) continue;
                     int nx = NodeX(n.Layer), ny = NodeY(n.Layer, n.Index, layer.Count);
                     bool reachable = run.CanTravelTo(n) && !Busy;
                     bool hov = n == hovered && reachable;
@@ -255,6 +266,11 @@ namespace DeckDark.View
                     }
                 }
 
+            c.ClipX0 = 0; c.ClipX1 = int.MaxValue;
+            // setas avisando que o mapa continua
+            if (mapScroll > 0.5f) PixelFont.Small.Draw(c, "<", x + 3, y + h / 2 + 4, Palette.Pencil);
+            if (mapScroll < run.LastLayer - 6.5f) PixelFont.Small.Draw(c, ">", x + w - 7, y + h / 2 + 4, Palette.Pencil);
+            PixelFont.Small.Draw(c, "ROOM " + run.Current.Layer + "/" + run.LastLayer, x + w - 90, y + 4, Palette.Pencil);
             if (hovered != null)
             {
                 string label = NodeLabel(hovered.Type);

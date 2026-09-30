@@ -75,10 +75,10 @@ namespace DeckDark.Core
         public readonly int RulesVersion;
         readonly List<string> seenEvents = new List<string>();
 
-        public RunState(int seed, int rulesVersion)
+        public RunState(int seed, int rulesVersion, PlayerClass cls = PlayerClass.Warrior)
         {
             Dice = new Dice(seed);
-            Sheet = CharacterSheet.NewWarrior();
+            Sheet = CharacterSheet.New(cls);
             RulesVersion = rulesVersion;
             Sheet.Hp = (int)(Sheet.MaxHp * Homebrew.StartingHpFraction(rulesVersion));
             BuildMap();
@@ -88,28 +88,30 @@ namespace DeckDark.Core
 
         public int LastLayer { get { return Layers.Count - 1; } }
 
+        public const int MapLength = 15;   // inicio + 13 salas + boss
+
         void BuildMap()
         {
-            // 7 camadas; os tipos das salas sao sorteados dentro de cada camada.
-            var shapes = new[]
-            {
-                new[] { NodeType.Start },
-                Shuffled(new[] { NodeType.Combat, NodeType.Combat, NodeType.Event }),
-                Shuffled(new[] { NodeType.Event, NodeType.Combat, NodeType.Treasure }),
-                Shuffled(new[] { NodeType.Elite, NodeType.Combat, NodeType.Event }),
-                Shuffled(new[] { NodeType.Combat, NodeType.Tavern, NodeType.Event }),
-                Shuffled(new[] { NodeType.Tavern, NodeType.Elite, NodeType.Treasure }),
-                new[] { NodeType.Boss },
-            };
-            for (int l = 0; l < shapes.Length; l++)
+            // Camadas de 3 salas. Algumas camadas tem tipo fixo (tesouro no meio, taverna antes do boss).
+            for (int l = 0; l < MapLength; l++)
             {
                 var layer = new List<MapNode>();
-                for (int i = 0; i < shapes[l].Length; i++)
-                    layer.Add(new MapNode { Layer = l, Index = i, Type = shapes[l][i] });
+                if (l == 0) layer.Add(new MapNode { Layer = 0, Index = 0, Type = NodeType.Start });
+                else if (l == MapLength - 1) layer.Add(new MapNode { Layer = l, Index = 0, Type = NodeType.Boss });
+                else
+                    for (int i = 0; i < 3; i++) layer.Add(new MapNode { Layer = l, Index = i, Type = RoomTypeFor(l) });
                 Layers.Add(layer);
             }
+            // nada de duas camadas so de elite: garante ao menos um combate comum em cada camada cheia de elites
+            for (int l = 1; l < MapLength - 1; l++)
+            {
+                bool allElite = true;
+                foreach (var n in Layers[l]) if (n.Type != NodeType.Elite) allElite = false;
+                if (allElite) Layers[l][Dice.Range(0, 3)].Type = NodeType.Combat;
+            }
 
-            // Caminhos: cada sala liga com a "de frente" e as vezes com a vizinha.
+            // Caminhos: cada sala segue em frente e as vezes troca de faixa,
+            // inclusive de cima para baixo (os caminhos se cruzam).
             for (int l = 0; l < Layers.Count - 1; l++)
             {
                 var a = Layers[l];
@@ -123,19 +125,32 @@ namespace DeckDark.Core
                         for (int j = 0; j < m; j++) { AddLink(a[i], j); incoming[j] = true; }
                         continue;
                     }
-                    int j0 = (int)System.Math.Round(i * (m - 1) / (double)(n - 1));
-                    AddLink(a[i], j0); incoming[j0] = true;
-                    int side = Dice.Range(0, 2) == 0 ? -1 : 1;
-                    int j1 = j0 + side;
-                    if (j1 >= 0 && j1 < m && Dice.Range(0, 100) < 55) { AddLink(a[i], j1); incoming[j1] = true; }
+                    AddLink(a[i], i); incoming[i] = true;
+                    int extra = Dice.Range(0, 100) < 60 ? 1 : 0;
+                    if (Dice.Range(0, 100) < 15) extra++;
+                    for (int e = 0; e < extra; e++)
+                    {
+                        int j = Dice.Range(0, m);
+                        AddLink(a[i], j); incoming[j] = true;
+                    }
                 }
                 for (int j = 0; j < m; j++)
-                {
-                    if (incoming[j]) continue;
-                    int i = (int)System.Math.Round(j * (n - 1) / (double)System.Math.Max(1, m - 1));
-                    AddLink(a[i], j);
-                }
+                    if (!incoming[j]) AddLink(a[Dice.Range(0, n)], j);
             }
+        }
+
+        NodeType RoomTypeFor(int l)
+        {
+            if (l == 1) return Dice.Range(0, 100) < 75 ? NodeType.Combat : NodeType.Event;
+            if (l == MapLength / 2) return NodeType.Treasure;       // camada do tesouro
+            if (l == MapLength - 2) return NodeType.Tavern;         // descanso antes do boss
+            int r = Dice.Range(0, 100);
+            if (l < 4) return r < 60 ? NodeType.Combat : (r < 88 ? NodeType.Event : NodeType.Treasure);
+            if (r < 40) return NodeType.Combat;
+            if (r < 60) return NodeType.Event;
+            if (r < 72) return NodeType.Elite;
+            if (r < 90) return NodeType.Tavern;
+            return NodeType.Treasure;
         }
 
         static void AddLink(MapNode from, int to)
@@ -171,7 +186,7 @@ namespace DeckDark.Core
             {
                 case NodeType.Boss: return EnemyLibrary.BossEncounter;
                 case NodeType.Elite: table = EnemyLibrary.EliteEncounters; break;
-                default: table = Current.Layer <= 2 ? EnemyLibrary.EasyEncounters : EnemyLibrary.HardEncounters; break;
+                default: table = Current.Layer <= 5 ? EnemyLibrary.EasyEncounters : EnemyLibrary.HardEncounters; break;
             }
             return table[Dice.Range(0, table.Length)];
         }
@@ -186,7 +201,7 @@ namespace DeckDark.Core
                 int r = Dice.Range(0, 100);
                 CardRarity want = r < (elite ? 18 : 8) ? CardRarity.Rare : (r < (elite ? 55 : 38) ? CardRarity.Uncommon : CardRarity.Common);
                 var pool = new List<CardDef>();
-                foreach (var c in CardLibrary.RewardPool)
+                foreach (var c in CardLibrary.PoolFor(Sheet.Class))
                 {
                     var rar = c.Rarity == CardRarity.Basic ? CardRarity.Common : c.Rarity;
                     if (rar == want && !picks.Contains(c)) pool.Add(c);
@@ -200,7 +215,7 @@ namespace DeckDark.Core
         public CardDef RandomCardOf(CardRarity rarity)
         {
             var pool = new List<CardDef>();
-            foreach (var c in CardLibrary.RewardPool) if (c.Rarity == rarity) pool.Add(c);
+            foreach (var c in CardLibrary.PoolFor(Sheet.Class)) if (c.Rarity == rarity) pool.Add(c);
             return pool[Dice.Range(0, pool.Count)];
         }
 
@@ -262,6 +277,7 @@ namespace DeckDark.Core
                     {
                         int idx = Sheet.Deck.IndexOf(CardLibrary.RaiseShield);
                         if (idx < 0) idx = Sheet.Deck.IndexOf(CardLibrary.SwordStrike);
+                        if (idx < 0) idx = Sheet.Deck.FindIndex(k => k.Rarity == CardRarity.Basic);
                         if (idx >= 0)
                         {
                             gains.Add("LOST: " + Sheet.Deck[idx].Name);
@@ -278,8 +294,9 @@ namespace DeckDark.Core
                         gains.Add("CURSE: NIGHTMARE");
                         break;
                     case OutcomeKind.GainStrength:
-                        Sheet.Scores[(int)Attr.STR] += cur.Amount;
-                        gains.Add("+" + cur.Amount + " STR");
+                        var main = Sheet.Class == PlayerClass.Wizard ? Attr.INT : Attr.STR;
+                        Sheet.Scores[(int)main] += cur.Amount;
+                        gains.Add("+" + cur.Amount + " " + main);
                         break;
                     case OutcomeKind.AddRandomRelic:
                     {

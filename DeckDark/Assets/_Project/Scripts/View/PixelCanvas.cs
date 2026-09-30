@@ -34,6 +34,8 @@ namespace DeckDark.View
         /// <summary>Cobertura de cada pixel (0 = transparente). So importa com TrackAlpha ligado (modo mesa 3D).</summary>
         public readonly byte[] A;
         public bool TrackAlpha;
+        // recorte horizontal (usado pelo mapa que rola)
+        public int ClipX0 = 0, ClipX1 = int.MaxValue;
 
         // Multiplicador de luz aplicado a tudo que for desenhado (usado para iluminar objetos)
         public float TintR = 1f, TintG = 1f, TintB = 1f;
@@ -89,6 +91,7 @@ namespace DeckDark.View
         {
             x += OffX; y += OffY;
             if ((uint)x >= (uint)W || (uint)y >= (uint)H) return;
+            if (x < ClipX0 || x >= ClipX1) return;
             int i = y * W + x;
             Px[i] = Tinted(c);
             A[i] = 255;
