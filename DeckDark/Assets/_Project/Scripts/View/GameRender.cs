@@ -88,6 +88,7 @@ namespace DeckDark.View
                 case GameScreen.Tavern: DrawTavern(c); break;
                 case GameScreen.Death: DrawDeath(c); break;
                 case GameScreen.Victory: DrawVictory(c); break;
+                case GameScreen.Codex: DrawCodex(c); break;
             }
 
             c.ResetTint();
@@ -390,7 +391,7 @@ namespace DeckDark.View
             if (card.Rarity == CardRarity.Rare) c.FillCircle(x + CardW - 9, y + 30, 2, Palette.Gold);
 
             // descricao
-            PixelFont.Small.DrawWrapped(c, card.Description(run.Sheet), x + 3, y + 48, CardW - 6, ink, true);
+            PixelFont.Small.DrawWrapped(c, card.Description(CardTextSheet), x + 3, y + 48, CardW - 6, ink, true);
             c.ResetTint();
         }
 

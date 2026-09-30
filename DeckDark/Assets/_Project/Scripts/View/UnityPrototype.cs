@@ -201,6 +201,14 @@ namespace DeckDark.View
 
         public int LoadInt(string key, int defaultValue) { return PlayerPrefs.GetInt("deckdark_" + key, defaultValue); }
 
+        public string LoadString(string key, string defaultValue) { return PlayerPrefs.GetString("deckdark_" + key, defaultValue); }
+
+        public void SaveString(string key, string value)
+        {
+            PlayerPrefs.SetString("deckdark_" + key, value);
+            PlayerPrefs.Save();
+        }
+
         public void DeleteKey(string key)
         {
             PlayerPrefs.DeleteKey("deckdark_" + key);
